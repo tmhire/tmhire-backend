@@ -1,0 +1,108 @@
+from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, List, Dict, Any, Union
+from app.db.mongodb import PyObjectId
+from bson import ObjectId
+
+class InputParams(BaseModel):
+    quantity: float
+    pumping_speed: float
+    onward_time: int
+    return_time: int
+    buffer_time: int
+
+class Trip(BaseModel):
+    trip_no: int
+    tm_no: str
+    plant_start: str
+    pump_start: str
+    unloading_time: str
+    return_: str = Field(..., alias="return")
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "trip_no": 1,
+                "tm_no": "A",
+                "plant_start": "08:30",
+                "pump_start": "09:00",
+                "unloading_time": "09:12",
+                "return": "09:52"
+            }
+        }
+    )
+
+class ScheduleModel(BaseModel):
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    user_id: PyObjectId
+    client_name: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    input_params: InputParams
+    output_table: Optional[List[Trip]] = Field(default_factory=list)
+    tm_count: Optional[int] = None
+    pumping_time: Optional[float] = None
+    status: str = "draft"  # draft, generated, finalized
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str},
+        json_schema_extra={
+            "example": {
+                "user_id": "60d5ec9af682fcd81a060e72",
+                "client_name": "ABC Constructions",
+                "input_params": {
+                    "quantity": 60,
+                    "pumping_speed": 30,
+                    "onward_time": 30,
+                    "return_time": 25,
+                    "buffer_time": 5
+                },
+                "tm_count": 6,
+                "pumping_time": 2.0,
+                "status": "draft"
+            }
+        }
+    )
+
+class ScheduleCreate(BaseModel):
+    client_name: str
+    input_params: InputParams
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "client_name": "ABC Constructions",
+                "input_params": {
+                    "quantity": 60,
+                    "pumping_speed": 30,
+                    "onward_time": 30,
+                    "return_time": 25,
+                    "buffer_time": 5
+                }
+            }
+        }
+    )
+
+class ScheduleUpdate(BaseModel):
+    client_name: Optional[str] = None
+    input_params: Optional[InputParams] = None
+    status: Optional[str] = None
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "client_name": "XYZ Constructions",
+                "input_params": {
+                    "quantity": 70,
+                    "pumping_speed": 35,
+                    "onward_time": 30,
+                    "return_time": 25,
+                    "buffer_time": 5
+                },
+                "status": "draft"
+            }
+        }
+    ) 
