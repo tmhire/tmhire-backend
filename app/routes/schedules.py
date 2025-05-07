@@ -5,7 +5,6 @@ from app.models.user import UserModel
 from app.services.schedule_service import (
     get_all_schedules,
     get_schedule,
-    create_schedule_and_generate_table,
     update_schedule,
     delete_schedule,
     calculate_tm_count,
@@ -19,15 +18,6 @@ router = APIRouter( tags=["Schedules"])
 async def read_schedules(current_user: UserModel = Depends(get_current_user)):
     """Retrieve all schedules for the current user"""
     return await get_all_schedules(str(current_user.id))
-
-
-@router.post("/", response_model=ScheduleModel, status_code=status.HTTP_201_CREATED)
-async def create_schedule_and_generate_table(
-    schedule: ScheduleCreate,
-    current_user: UserModel = Depends(get_current_user)
-):
-    """Create a schedule and generate the output table immediately"""
-    return await create_schedule_and_generate_table(schedule, str(current_user.id))
 
 
 @router.get("/{schedule_id}", response_model=ScheduleModel)
