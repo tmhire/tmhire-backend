@@ -67,13 +67,13 @@ async def delete_existing_schedule(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Delete a schedule by ID"""
-    deleted = await delete_schedule(schedule_id, str(current_user.id))
-    if not deleted:
+    result = await delete_schedule(schedule_id, str(current_user.id))
+    if not result["deleted"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Schedule not found"
         )
-    return None
+    return result
 
 
 @router.post("/calculate-tm", response_model=Dict)
