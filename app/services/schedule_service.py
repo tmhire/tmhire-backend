@@ -140,9 +140,16 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
 
     return await get_schedule(id, user_id)
 
-async def delete_schedule(id: str, user_id: str) -> bool:
-    result = await schedules.delete_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
-    return result.deleted_count > 0
+async def delete_schedule(id: str, user_id: str) -> Dict[str, str | bool]:
+    result = await schedules.delete_one({
+        "_id": ObjectId(id),
+        "user_id": ObjectId(user_id)
+    })
+
+    return {
+        "deleted": result.deleted_count > 0,
+        "schedule_id": id
+    }
 
 def get_unloading_time(capacity: float) -> int:
     rounded_capacity = round(capacity)
@@ -202,16 +209,16 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
 
     # Generate trips based on selected TMs
     while remaining_quantity > 0:
-        for tm_id in selected_tms:
+        for tm_idx in selected_tms:
             if remaining_quantity <= 0:
                 break
 
             # Calculate start times for plant, pump, unloading, and return
-            if trip_no == 1 and tm_id == selected_tms[0]:
+            if trip_no == 1 and tm_idx == selected_tms[0]:
                 plant_start = base_time
                 pump_start = base_time + timedelta(minutes=schedule["input_params"]["onward_time"])
             else:
-                prev_trip = next((t for t in reversed(trips) if t.tm_no == tm_id), None)
+                prev_trip = next((t for t in reversed(trips) if t.tm_no == tm_idx), None)
                 if prev_trip:
                     prev_return = datetime.strptime(prev_trip.return_, "%H:%M")
                     plant_start = prev_return + timedelta(minutes=schedule["input_params"]["buffer_time"])
@@ -226,7 +233,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
             # Create a trip object
             trip = Trip(
                 trip_no=trip_no,
-                tm_no=tm_id,
+                tm_no=tm_idx,
                 plant_start=plant_start.strftime("%H:%M"),
                 pump_start=pump_start.strftime("%H:%M"),
                 unloading_time=unloading_end.strftime("%H:%M"),
