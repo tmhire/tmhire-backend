@@ -26,98 +26,6 @@ async def get_schedule(id: str, user_id: str) -> Optional[ScheduleModel]:
         return ScheduleModel(**schedule)
     return None
 
-async def create_schedule_and_generate_table(schedule: ScheduleCreate, user_id: str) -> ScheduleModel:
-    schedule_data = schedule.model_dump()
-    schedule_data["user_id"] = ObjectId(user_id)
-    schedule_data["created_at"] = datetime.utcnow()
-    schedule_data["last_updated"] = datetime.utcnow()
-    schedule_data["output_table"] = []
-
-    # Calculate pumping time
-    quantity = schedule_data["input_params"]["quantity"]
-    pumping_speed = schedule_data["input_params"]["pumping_speed"]
-    schedule_data["pumping_time"] = quantity / pumping_speed
-
-    # Insert the schedule into the database
-    result = await schedules.insert_one(schedule_data)
-    new_schedule = await schedules.find_one({"_id": result.inserted_id})
-
-    # Now, generate the output table based on this new schedule
-    avg_capacity = await get_average_capacity(user_id)
-    if avg_capacity == 0:
-        raise ValueError("Cannot generate schedule table, average capacity is 0.")
-
-    import math
-    tm_count = math.ceil(schedule_data["input_params"]["quantity"] / avg_capacity)
-
-    # Update the schedule with the Transit Mixer count
-    await schedules.update_one(
-        {"_id": ObjectId(result.inserted_id)},
-        {"$set": {"tm_count": tm_count}}
-    )
-
-    # Unloading time and base time setup
-    unloading_time_min = get_unloading_time(avg_capacity)
-    base_time = datetime.strptime(schedule_data["input_params"]["start_time"], "%H:%M")
-
-    trips = []
-    tm_identifiers = [chr(65 + i) for i in range(tm_count)]
-
-    total_quantity = schedule_data["input_params"]["quantity"]
-    remaining_quantity = total_quantity
-    trip_no = 1
-
-    # Generate the trips and schedule table
-    while remaining_quantity > 0:
-        for tm_idx, tm_id in enumerate(tm_identifiers):
-            if remaining_quantity <= 0:
-                break
-
-            # Calculate start times for plant, pump, unloading, and return
-            if trip_no == 1 and tm_idx == 0:
-                plant_start = base_time
-                pump_start = base_time + timedelta(minutes=schedule_data["input_params"]["onward_time"])
-            else:
-                prev_trip = next((t for t in reversed(trips) if t.tm_no == tm_id), None)
-                if prev_trip:
-                    prev_return = datetime.strptime(prev_trip.return_, "%H:%M")
-                    plant_start = prev_return + timedelta(minutes=schedule_data["input_params"]["buffer_time"])
-                else:
-                    plant_start = base_time
-                pump_start = plant_start + timedelta(minutes=schedule_data["input_params"]["onward_time"])
-
-            # Calculate unloading and return times
-            unloading_end = pump_start + timedelta(minutes=unloading_time_min)
-            return_time = unloading_end + timedelta(minutes=schedule_data["input_params"]["return_time"])
-
-            # Create a trip object
-            trip = Trip(
-                trip_no=trip_no,
-                tm_no=tm_id,
-                plant_start=plant_start.strftime("%H:%M"),
-                pump_start=pump_start.strftime("%H:%M"),
-                unloading_time=unloading_end.strftime("%H:%M"),
-                return_=return_time.strftime("%H:%M")
-            )
-
-            trips.append(trip)
-            trip_no += 1
-            remaining_quantity -= avg_capacity
-
-    # After generating the table, update the schedule document
-    await schedules.update_one(
-        {"_id": ObjectId(result.inserted_id)},
-        {"$set": {
-            "output_table": [trip.model_dump(by_alias=True) for trip in trips],
-            "status": "generated",
-            "last_updated": datetime.utcnow()
-        }}
-    )
-
-    # Return the schedule with the generated table
-    return ScheduleModel(**await schedules.find_one({"_id": result.inserted_id}))
-
-
 async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Optional[ScheduleModel]:
     schedule_data = {k: v for k, v in schedule.model_dump().items() if v is not None}
 
@@ -190,7 +98,7 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     }
 
 async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: str) -> ScheduleModel:
-    """Generate the schedule based on selected Transit Mixers."""
+    """Generate the schedule based on selected Transit Mixers with single pump constraint."""
     schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
     if not schedule:
         raise ValueError("Schedule not found.")
@@ -200,51 +108,55 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
         raise ValueError("Cannot generate schedule, average capacity is 0.")
 
     unloading_time_min = get_unloading_time(avg_capacity)
-    base_time = datetime.strptime("08:00", "%H:%M")
+    base_time = datetime.strptime(schedule["input_params"].get("pump_start", "08:00"), "%H:%M")
+
+    onward_time = schedule["input_params"]["onward_time"]
+    return_time = schedule["input_params"]["return_time"]
+    buffer_time = schedule["input_params"]["buffer_time"]
 
     trips = []
     total_quantity = schedule["input_params"]["quantity"]
     remaining_quantity = total_quantity
     trip_no = 1
+    tm_counters = {tm: 0 for tm in selected_tms}  # count trips per TM
+    pump_available_time = base_time  # pump is free at this time
 
-    # Generate trips based on selected TMs
     while remaining_quantity > 0:
-        for tm_idx in selected_tms:
+        for tm_no in selected_tms:
             if remaining_quantity <= 0:
                 break
 
-            # Calculate start times for plant, pump, unloading, and return
-            if trip_no == 1 and tm_idx == selected_tms[0]:
+            # The next unloading start must be after pump is free + buffer
+            unloading_start = pump_available_time
+            plant_start = unloading_start - timedelta(minutes=onward_time + unloading_time_min)
+
+            # Make sure plant start is not earlier than base time (you can skip this if unnecessary)
+            if plant_start < base_time:
                 plant_start = base_time
-                pump_start = base_time + timedelta(minutes=schedule["input_params"]["onward_time"])
-            else:
-                prev_trip = next((t for t in reversed(trips) if t.tm_no == tm_idx), None)
-                if prev_trip:
-                    prev_return = datetime.strptime(prev_trip.return_, "%H:%M")
-                    plant_start = prev_return + timedelta(minutes=schedule["input_params"]["buffer_time"])
-                else:
-                    plant_start = base_time
-                pump_start = plant_start + timedelta(minutes=schedule["input_params"]["onward_time"])
+                unloading_start = plant_start + timedelta(minutes=onward_time)
 
-            # Calculate unloading and return times
+            pump_start = unloading_start
             unloading_end = pump_start + timedelta(minutes=unloading_time_min)
-            return_time = unloading_end + timedelta(minutes=schedule["input_params"]["return_time"])
+            return_at = unloading_end + timedelta(minutes=return_time)
 
-            # Create a trip object
             trip = Trip(
                 trip_no=trip_no,
-                tm_no=tm_idx,
+                tm_no=tm_no,
                 plant_start=plant_start.strftime("%H:%M"),
                 pump_start=pump_start.strftime("%H:%M"),
                 unloading_time=unloading_end.strftime("%H:%M"),
-                return_=return_time.strftime("%H:%M")
+                return_=return_at.strftime("%H:%M")
             )
 
             trips.append(trip)
-            trip_no += 1
             remaining_quantity -= avg_capacity
+            trip_no += 1
+            tm_counters[tm_no] += 1
 
-    # Update the schedule with the generated table
+            # Update pump availability
+            pump_available_time = unloading_end + timedelta(minutes=buffer_time)
+
+    # Update schedule
     await schedules.update_one(
         {"_id": ObjectId(schedule_id)},
         {"$set": {
