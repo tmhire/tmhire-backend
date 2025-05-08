@@ -105,8 +105,13 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     schedule_data["tm_count"] = tm_count
     schedule_data["output_table"] = []
 
-    # Ensure input_params is included in the draft schedule
-    schedule_data["input_params"] = schedule.input_params.dict()
+    # Ensure input_params is included in the draft schedule and pump_start is a datetime
+    schedule_data["input_params"] = schedule.input_params.model_dump()
+    
+    # Make sure pump_start is a datetime object if it exists in input_params
+    if "pump_start" not in schedule_data["input_params"] or not isinstance(schedule_data["input_params"]["pump_start"], datetime):
+        # Set default to today 8AM if not provided
+        schedule_data["input_params"]["pump_start"] = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
 
     result = await schedules.insert_one(schedule_data)
     
@@ -135,7 +140,21 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
 
     # Use avg_capacity for unloading time calculation only
     unloading_time_min = get_unloading_time(avg_capacity)
-    base_time = datetime.strptime(schedule["input_params"].get("pump_start", "08:00"), "%H:%M")
+    
+    # Get pump start time from the schedule input parameters
+    # If it's already a datetime object, use it directly
+    if isinstance(schedule["input_params"].get("pump_start"), datetime):
+        base_time = schedule["input_params"]["pump_start"]
+    else:
+        # Try to parse from string if it's not a datetime
+        try:
+            base_time = datetime.strptime(schedule["input_params"].get("pump_start", "08:00"), "%H:%M")
+            # Set today's date if only time is provided
+            current_date = datetime.now().date()
+            base_time = datetime.combine(current_date, base_time.time())
+        except (ValueError, TypeError):
+            # Default to today 8:00 AM if parsing fails
+            base_time = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
 
     onward_time = schedule["input_params"]["onward_time"]
     return_time = schedule["input_params"]["return_time"]
@@ -220,13 +239,14 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
                 
             completed_quantity += trip_capacity
 
+            # Use datetime objects directly
             trip = Trip(
                 trip_no=trip_no,
                 tm_no=tm_identifier,
-                plant_start=plant_start.strftime("%H:%M"),
-                pump_start=pump_start.strftime("%H:%M"),
-                unloading_time=unloading_end.strftime("%H:%M"),
-                return_=return_at.strftime("%H:%M"),
+                plant_start=plant_start,
+                pump_start=pump_start,
+                unloading_time=unloading_end,
+                return_=return_at,
                 completed_capacity=completed_quantity
             )
 

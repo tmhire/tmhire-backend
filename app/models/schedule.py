@@ -10,26 +10,28 @@ class InputParams(BaseModel):
     onward_time: int
     return_time: int
     buffer_time: int
+    pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
 
 class Trip(BaseModel):
     trip_no: int
     tm_no: str
-    plant_start: str
-    pump_start: str
-    unloading_time: str
-    return_: str = Field(..., alias="return")
+    plant_start: datetime
+    pump_start: datetime
+    unloading_time: datetime
+    return_: datetime = Field(..., alias="return")
     completed_capacity: float = 0
     
     model_config = ConfigDict(
         populate_by_name=True,
+        json_encoders={datetime: lambda dt: dt.isoformat()},
         json_schema_extra={
             "example": {
                 "trip_no": 1,
                 "tm_no": "A",
-                "plant_start": "08:30",
-                "pump_start": "09:00",
-                "unloading_time": "09:12",
-                "return": "09:52",
+                "plant_start": "2023-06-25T08:30:00",
+                "pump_start": "2023-06-25T09:00:00",
+                "unloading_time": "2023-06-25T09:12:00",
+                "return": "2023-06-25T09:52:00",
                 "completed_capacity": 8.0
             }
         }
