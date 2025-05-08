@@ -15,10 +15,10 @@ class InputParams(BaseModel):
 class Trip(BaseModel):
     trip_no: int
     tm_no: str
-    plant_start: datetime
-    pump_start: datetime
-    unloading_time: datetime
-    return_: datetime = Field(..., alias="return")
+    plant_start: Union[datetime, str]
+    pump_start: Union[datetime, str]
+    unloading_time: Union[datetime, str]
+    return_: Union[datetime, str] = Field(..., alias="return")
     completed_capacity: float = 0
     
     model_config = ConfigDict(
