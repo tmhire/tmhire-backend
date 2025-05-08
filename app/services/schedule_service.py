@@ -17,6 +17,31 @@ UNLOADING_TIME_LOOKUP = {
 async def get_all_schedules(user_id: str) -> List[ScheduleModel]:
     schedule_list = []
     async for schedule in schedules.find({"user_id": ObjectId(user_id)}):
+        # Convert string time values to datetime objects if they are in old format
+        current_date = datetime.now().date()
+        
+        for trip in schedule.get("output_table", []):
+            # Fields that need conversion
+            time_fields = ["plant_start", "pump_start", "unloading_time", "return"]
+            
+            for field in time_fields:
+                # Skip if field doesn't exist
+                if field not in trip:
+                    continue
+                
+                # Skip if it's already a datetime
+                if isinstance(trip[field], datetime):
+                    continue
+                
+                # If it's a string in HH:MM format (legacy format)
+                if isinstance(trip[field], str) and ":" in trip[field] and len(trip[field]) <= 5:
+                    try:
+                        time_obj = datetime.strptime(trip[field], "%H:%M").time()
+                        trip[field] = datetime.combine(current_date, time_obj)
+                    except ValueError:
+                        # If can't parse, just leave as is and let Pydantic handle the error
+                        pass
+        
         schedule_list.append(ScheduleModel(**schedule))
     return schedule_list
 
@@ -41,6 +66,30 @@ async def get_schedule(id: str, user_id: str) -> Optional[ScheduleModel]:
                 tm_id = trip.get("tm_no")
                 if tm_id and tm_id in tm_map:
                     trip["tm_no"] = tm_map[tm_id]
+        
+        # Convert string time values to datetime objects if they are in old format
+        current_date = datetime.now().date()
+        for trip in schedule.get("output_table", []):
+            # Fields that need conversion
+            time_fields = ["plant_start", "pump_start", "unloading_time", "return"]
+            
+            for field in time_fields:
+                # Skip if field doesn't exist
+                if field not in trip:
+                    continue
+                
+                # Skip if it's already a datetime
+                if isinstance(trip[field], datetime):
+                    continue
+                
+                # If it's a string in HH:MM format (legacy format)
+                if isinstance(trip[field], str) and ":" in trip[field] and len(trip[field]) <= 5:
+                    try:
+                        time_obj = datetime.strptime(trip[field], "%H:%M").time()
+                        trip[field] = datetime.combine(current_date, time_obj)
+                    except ValueError:
+                        # If can't parse, just leave as is and let Pydantic handle the error
+                        pass
         
         return ScheduleModel(**schedule)
     return None
