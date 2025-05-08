@@ -1,4 +1,4 @@
-from app.db.mongodb import schedules, PyObjectId
+from app.db.mongodb import schedules, PyObjectId, transit_mixers
 from app.models.schedule import ScheduleModel, ScheduleCreate, ScheduleUpdate, Trip
 from app.services.tm_service import get_average_capacity
 from datetime import datetime, timedelta
@@ -23,6 +23,25 @@ async def get_all_schedules(user_id: str) -> List[ScheduleModel]:
 async def get_schedule(id: str, user_id: str) -> Optional[ScheduleModel]:
     schedule = await schedules.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
     if schedule:
+        # Get the tm_identifiers map for any TMs in the output_table
+        tm_ids = []
+        for trip in schedule.get("output_table", []):
+            tm_id = trip.get("tm_no")
+            if tm_id and ObjectId.is_valid(tm_id):
+                tm_ids.append(ObjectId(tm_id))
+        
+        # If we have TM IDs, look up their identifiers
+        if tm_ids:
+            tm_map = {}
+            async for tm in transit_mixers.find({"_id": {"$in": tm_ids}}):
+                tm_map[str(tm["_id"])] = tm["identifier"]
+            
+            # Replace the TM IDs with their identifiers in the output_table
+            for trip in schedule.get("output_table", []):
+                tm_id = trip.get("tm_no")
+                if tm_id and tm_id in tm_map:
+                    trip["tm_no"] = tm_map[tm_id]
+        
         return ScheduleModel(**schedule)
     return None
 
@@ -107,6 +126,11 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     if avg_capacity == 0:
         raise ValueError("Cannot generate schedule, average capacity is 0.")
 
+    # Get the actual TM identifiers from the database
+    tm_map = {}
+    async for tm in transit_mixers.find({"_id": {"$in": [ObjectId(tm_id) for tm_id in selected_tms]}}):
+        tm_map[str(tm["_id"])] = tm["identifier"]
+
     unloading_time_min = get_unloading_time(avg_capacity)
     base_time = datetime.strptime(schedule["input_params"].get("pump_start", "08:00"), "%H:%M")
 
@@ -122,7 +146,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     pump_available_time = base_time  # pump is free at this time
 
     while remaining_quantity > 0:
-        for tm_no in selected_tms:
+        for tm_id in selected_tms:
             if remaining_quantity <= 0:
                 break
 
@@ -139,9 +163,12 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
             unloading_end = pump_start + timedelta(minutes=unloading_time_min)
             return_at = unloading_end + timedelta(minutes=return_time)
 
+            # Use the TM identifier instead of just the ID
+            tm_identifier = tm_map.get(tm_id, tm_id)
+
             trip = Trip(
                 trip_no=trip_no,
-                tm_no=tm_no,
+                tm_no=tm_identifier,
                 plant_start=plant_start.strftime("%H:%M"),
                 pump_start=pump_start.strftime("%H:%M"),
                 unloading_time=unloading_end.strftime("%H:%M"),
@@ -151,7 +178,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
             trips.append(trip)
             remaining_quantity -= avg_capacity
             trip_no += 1
-            tm_counters[tm_no] += 1
+            tm_counters[tm_id] += 1
 
             # Update pump availability
             pump_available_time = unloading_end + timedelta(minutes=buffer_time)
