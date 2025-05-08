@@ -16,7 +16,7 @@ security = HTTPBearer()
 SECRET_KEY = os.getenv("SECRET_KEY", "placeholder_secret_key")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
 async def get_user_by_email(email: str) -> Optional[UserModel]:
     """Get a user by email"""
