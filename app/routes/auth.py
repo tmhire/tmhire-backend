@@ -36,7 +36,7 @@ async def login_google(token_data: GoogleToken):
         # Create access token
         access_token = create_access_token(
             data={"sub": user.email},
-            expires_delta=timedelta(minutes=30)
+            expires_delta=timedelta(minutes=1440)
         )
         
         return {"access_token": access_token, "token_type": "bearer"}
