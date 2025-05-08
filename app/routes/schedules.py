@@ -51,7 +51,7 @@ async def update_existing_schedule(
     return updated_schedule
 
 
-@router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{schedule_id}", status_code=status.HTTP_200_OK)
 async def delete_existing_schedule(
     schedule_id: str,
     current_user: UserModel = Depends(get_current_user)
@@ -63,7 +63,10 @@ async def delete_existing_schedule(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Schedule not found"
         )
-    return result
+    return {
+        "deleted": True,
+        "schedule_id": schedule_id
+    }
 
 
 @router.post("/calculate-tm", response_model=Dict)
