@@ -18,6 +18,7 @@ class Trip(BaseModel):
     pump_start: str
     unloading_time: str
     return_: str = Field(..., alias="return")
+    completed_capacity: float = 0
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -28,7 +29,8 @@ class Trip(BaseModel):
                 "plant_start": "08:30",
                 "pump_start": "09:00",
                 "unloading_time": "09:12",
-                "return": "09:52"
+                "return": "09:52",
+                "completed_capacity": 8.0
             }
         }
     )

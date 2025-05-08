@@ -141,30 +141,50 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     trips = []
     total_quantity = schedule["input_params"]["quantity"]
     remaining_quantity = total_quantity
+    completed_quantity = 0  # Track how much has been completed
     trip_no = 1
-    tm_counters = {tm: 0 for tm in selected_tms}  # count trips per TM
+    
+    # Track when each TM becomes available (returns from its last trip)
+    tm_available_times = {tm: base_time for tm in selected_tms}
+    
     pump_available_time = base_time  # pump is free at this time
 
     while remaining_quantity > 0:
-        for tm_id in selected_tms:
+        # Find the earliest time a TM is available
+        available_tms = sorted(selected_tms, key=lambda tm: tm_available_times[tm])
+        
+        for tm_id in available_tms:
             if remaining_quantity <= 0:
                 break
 
-            # The next unloading start must be after pump is free + buffer
-            unloading_start = pump_available_time
-            plant_start = unloading_start - timedelta(minutes=onward_time + unloading_time_min)
-
-            # Make sure plant start is not earlier than base time (you can skip this if unnecessary)
-            if plant_start < base_time:
-                plant_start = base_time
-                unloading_start = plant_start + timedelta(minutes=onward_time)
-
+            # Calculate earliest possible plant_start time (can't be earlier than when TM is available)
+            # This ensures a TM doesn't leave for a trip before returning from previous one
+            plant_start = tm_available_times[tm_id]
+            
+            # Calculate when this trip would reach the pump
+            unloading_start = plant_start + timedelta(minutes=onward_time)
+            
+            # If pump isn't available at calculated unloading_start, adjust times
+            if unloading_start < pump_available_time:
+                unloading_start = pump_available_time
+                plant_start = unloading_start - timedelta(minutes=onward_time)
+                
+                # Double-check plant_start isn't before TM is available
+                if plant_start < tm_available_times[tm_id]:
+                    plant_start = tm_available_times[tm_id]
+                    unloading_start = plant_start + timedelta(minutes=onward_time)
+            
+            # Calculate remaining timings
             pump_start = unloading_start
             unloading_end = pump_start + timedelta(minutes=unloading_time_min)
             return_at = unloading_end + timedelta(minutes=return_time)
-
+            
             # Use the TM identifier instead of just the ID
             tm_identifier = tm_map.get(tm_id, tm_id)
+            
+            # Update completed quantity and calculate capacity for this trip
+            trip_capacity = min(avg_capacity, remaining_quantity)
+            completed_quantity += trip_capacity
 
             trip = Trip(
                 trip_no=trip_no,
@@ -172,16 +192,24 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
                 plant_start=plant_start.strftime("%H:%M"),
                 pump_start=pump_start.strftime("%H:%M"),
                 unloading_time=unloading_end.strftime("%H:%M"),
-                return_=return_at.strftime("%H:%M")
+                return_=return_at.strftime("%H:%M"),
+                completed_capacity=completed_quantity
             )
 
             trips.append(trip)
-            remaining_quantity -= avg_capacity
+            remaining_quantity -= trip_capacity
             trip_no += 1
-            tm_counters[tm_id] += 1
-
+            
+            # Update when this TM will be available next
+            tm_available_times[tm_id] = return_at
+            
             # Update pump availability
             pump_available_time = unloading_end + timedelta(minutes=buffer_time)
+            
+            # Break after scheduling one trip with the current TM
+            # This prevents remaining TMs from being scheduled right away,
+            # allowing us to re-check all TMs by availability time on the next iteration
+            break
 
     # Update schedule
     await schedules.update_one(
