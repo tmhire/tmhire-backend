@@ -126,11 +126,14 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     if avg_capacity == 0:
         raise ValueError("Cannot generate schedule, average capacity is 0.")
 
-    # Get the actual TM identifiers from the database
-    tm_map = {}
+    # Get the actual TM identifiers and capacities from the database
+    tm_map = {}  # Maps TM ID to identifier
+    tm_capacities = {}  # Maps TM ID to capacity
     async for tm in transit_mixers.find({"_id": {"$in": [ObjectId(tm_id) for tm_id in selected_tms]}}):
         tm_map[str(tm["_id"])] = tm["identifier"]
+        tm_capacities[str(tm["_id"])] = tm["capacity"]
 
+    # Use avg_capacity for unloading time calculation only
     unloading_time_min = get_unloading_time(avg_capacity)
     base_time = datetime.strptime(schedule["input_params"].get("pump_start", "08:00"), "%H:%M")
 
@@ -150,12 +153,37 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     pump_available_time = base_time  # pump is free at this time
 
     while remaining_quantity > 0:
-        # Find the earliest time a TM is available
-        available_tms = sorted(selected_tms, key=lambda tm: tm_available_times[tm])
+        # Find all TMs that are available, sorted by availability time
+        available_tms = sorted(
+            [tm for tm in selected_tms if tm_available_times[tm] <= pump_available_time + timedelta(minutes=30)],
+            key=lambda tm: tm_available_times[tm]
+        )
         
+        if not available_tms:
+            # If no TMs are available within 30 minutes of when the pump is available,
+            # just take the earliest available TM
+            available_tms = sorted(selected_tms, key=lambda tm: tm_available_times[tm])
+
+        # For the final trips, try to find a TM that can exactly match or get closest to remaining quantity
+        if remaining_quantity <= max(tm_capacities.values()):
+            # Sort TMs by how closely their capacity matches the remaining quantity
+            available_tms = sorted(
+                available_tms,
+                key=lambda tm: abs(tm_capacities.get(tm, avg_capacity) - remaining_quantity)
+            )
+        else:
+            # For non-final trips, prioritize TMs with larger capacities to minimize total trips
+            available_tms = sorted(
+                available_tms,
+                key=lambda tm: (-tm_capacities.get(tm, avg_capacity), tm_available_times[tm])
+            )
+            
         for tm_id in available_tms:
             if remaining_quantity <= 0:
                 break
+
+            # Get this TM's specific capacity
+            tm_capacity = tm_capacities.get(tm_id, avg_capacity)
 
             # Calculate earliest possible plant_start time (can't be earlier than when TM is available)
             # This ensures a TM doesn't leave for a trip before returning from previous one
@@ -183,7 +211,13 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
             tm_identifier = tm_map.get(tm_id, tm_id)
             
             # Update completed quantity and calculate capacity for this trip
-            trip_capacity = min(avg_capacity, remaining_quantity)
+            # Use the TM's actual capacity, but don't exceed remaining quantity
+            trip_capacity = min(tm_capacity, remaining_quantity)
+            
+            # Check if we'd exceed the total required quantity
+            if completed_quantity + trip_capacity > total_quantity:
+                trip_capacity = total_quantity - completed_quantity
+                
             completed_quantity += trip_capacity
 
             trip = Trip(
@@ -207,8 +241,6 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
             pump_available_time = unloading_end + timedelta(minutes=buffer_time)
             
             # Break after scheduling one trip with the current TM
-            # This prevents remaining TMs from being scheduled right away,
-            # allowing us to re-check all TMs by availability time on the next iteration
             break
 
     # Update schedule
