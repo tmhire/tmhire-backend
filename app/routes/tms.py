@@ -6,67 +6,141 @@ from app.services.tm_service import (
 )
 from app.services.auth_service import get_current_user
 from typing import List
+from app.schemas.response import StandardResponse
 
-router = APIRouter()
+router = APIRouter(tags=["Transit Mixers"])
 
-@router.get("/", response_model=List[TransitMixerModel])
+@router.get("/", response_model=StandardResponse[List[TransitMixerModel]])
 async def read_tms(current_user: UserModel = Depends(get_current_user)):
-    """Get all transit mixers for the current user"""
-    return await get_all_tms(str(current_user.id))
+    """
+    Retrieve all transit mixers for the current user.
+    
+    Returns a list of all transit mixers with their details including capacity,
+    identifier, and plant association.
+    """
+    tms = await get_all_tms(str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Transit mixers retrieved successfully",
+        data=tms
+    )
 
-@router.post("/", response_model=TransitMixerModel, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=StandardResponse[TransitMixerModel], status_code=status.HTTP_201_CREATED)
 async def create_transit_mixer(
     tm: TransitMixerCreate,
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Create a new transit mixer"""
-    return await create_tm(tm, str(current_user.id))
+    """
+    Create a new transit mixer.
+    
+    Request body:
+    - identifier: Unique identifier for the transit mixer
+    - capacity: Concrete capacity in cubic meters
+    - plant_id: ID of the plant this transit mixer belongs to (optional)
+    - notes: Additional notes about this transit mixer (optional)
+    
+    Returns the newly created transit mixer with its ID.
+    """
+    new_tm = await create_tm(tm, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Transit mixer created successfully",
+        data=new_tm
+    )
 
-@router.get("/average-capacity", response_model=AverageCapacity)
+@router.get("/average-capacity", response_model=StandardResponse[AverageCapacity])
 async def read_average_capacity(current_user: UserModel = Depends(get_current_user)):
-    """Get average capacity of all transit mixers for the current user"""
+    """
+    Get average capacity of all transit mixers for the current user.
+    
+    Returns a single value representing the average capacity across all
+    transit mixers owned by the user.
+    """
     avg_capacity = await get_average_capacity(str(current_user.id))
-    return {"average_capacity": avg_capacity}
+    return StandardResponse(
+        success=True,
+        message="Average capacity retrieved successfully",
+        data={"average_capacity": avg_capacity}
+    )
 
-@router.get("/{tm_id}", response_model=TransitMixerModel)
+@router.get("/{tm_id}", response_model=StandardResponse[TransitMixerModel])
 async def read_tm(
     tm_id: str,
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Get a specific transit mixer by ID"""
+    """
+    Retrieve a specific transit mixer by ID.
+    
+    Path parameter:
+    - tm_id: The ID of the transit mixer to retrieve
+    
+    Returns the transit mixer details if found.
+    """
     tm = await get_tm(tm_id, str(current_user.id))
     if not tm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Transit mixer not found"
         )
-    return tm
+    return StandardResponse(
+        success=True,
+        message="Transit mixer retrieved successfully",
+        data=tm
+    )
 
-@router.put("/{tm_id}", response_model=TransitMixerModel)
+@router.put("/{tm_id}", response_model=StandardResponse[TransitMixerModel])
 async def update_transit_mixer(
     tm_id: str,
     tm: TransitMixerUpdate,
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Update a transit mixer"""
+    """
+    Update a transit mixer's details.
+    
+    Path parameter:
+    - tm_id: The ID of the transit mixer to update
+    
+    Request body:
+    - identifier: Updated identifier (optional)
+    - capacity: Updated capacity in cubic meters (optional)
+    - plant_id: Updated plant association (optional)
+    - notes: Updated notes (optional)
+    
+    Returns the updated transit mixer details.
+    """
     updated_tm = await update_tm(tm_id, tm, str(current_user.id))
     if not updated_tm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Transit mixer not found"
         )
-    return updated_tm
+    return StandardResponse(
+        success=True,
+        message="Transit mixer updated successfully",
+        data=updated_tm
+    )
 
-@router.delete("/{tm_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{tm_id}", response_model=StandardResponse, status_code=status.HTTP_200_OK)
 async def delete_transit_mixer(
     tm_id: str,
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Delete a transit mixer"""
+    """
+    Delete a transit mixer.
+    
+    Path parameter:
+    - tm_id: The ID of the transit mixer to delete
+    
+    Returns a success message on successful deletion.
+    """
     deleted = await delete_tm(tm_id, str(current_user.id))
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Transit mixer not found"
         )
-    return None 
+    return StandardResponse(
+        success=True,
+        message="Transit mixer deleted successfully",
+        data=None
+    ) 
