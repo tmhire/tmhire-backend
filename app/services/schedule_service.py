@@ -3,9 +3,10 @@ from app.models.schedule import ScheduleModel, ScheduleCreate, ScheduleUpdate, T
 from app.services.tm_service import get_average_capacity, get_tm
 from app.services.client_service import get_client
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, time
 from bson import ObjectId
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
+from app.schemas.utils import safe_serialize
 
 # Unloading time lookup table
 UNLOADING_TIME_LOOKUP = {
@@ -192,15 +193,60 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     
     # Ensure input_params is included in the draft schedule and pump_start is a datetime
     input_params = schedule.input_params.model_dump()
-    if isinstance(input_params.get("schedule_date"), date):
-        input_params["schedule_date"] = input_params["schedule_date"].isoformat()
+    
+    # Extract and standardize schedule_date
+    schedule_date = None
+    if "schedule_date" in input_params:
+        if isinstance(input_params["schedule_date"], date):
+            schedule_date = input_params["schedule_date"]
+            input_params["schedule_date"] = schedule_date.isoformat()
+        elif isinstance(input_params["schedule_date"], str):
+            try:
+                schedule_date = datetime.fromisoformat(input_params["schedule_date"]).date()
+            except ValueError:
+                try:
+                    schedule_date = datetime.strptime(input_params["schedule_date"], "%Y-%m-%d").date()
+                except ValueError:
+                    schedule_date = datetime.now().date()
+            input_params["schedule_date"] = schedule_date.isoformat()
+    else:
+        # If no schedule_date provided, use today's date
+        schedule_date = datetime.now().date()
+        input_params["schedule_date"] = schedule_date.isoformat()
+    
+    print(f"Using schedule_date: {schedule_date} for all datetime fields")
+    
+    # Process pump_start time
+    pump_start_time = None
+    if "pump_start" in input_params:
+        if isinstance(input_params["pump_start"], datetime):
+            # Extract just the time component
+            pump_start_time = input_params["pump_start"].time()
+        elif isinstance(input_params["pump_start"], dict) and "$date" in input_params["pump_start"]:
+            # Handle MongoDB $date format
+            if isinstance(input_params["pump_start"]["$date"], str):
+                date_str = input_params["pump_start"]["$date"]
+                pump_start_time = datetime.fromisoformat(date_str.replace("Z", "+00:00")).time()
+            else:
+                pump_start_time = datetime.fromtimestamp(input_params["pump_start"]["$date"] / 1000).time()
+        elif isinstance(input_params["pump_start"], str):
+            try:
+                if "T" in input_params["pump_start"]:  # ISO format with date and time
+                    pump_start_time = datetime.fromisoformat(input_params["pump_start"]).time()
+                else:  # Just time component
+                    pump_start_time = datetime.strptime(input_params["pump_start"], "%H:%M").time()
+            except ValueError:
+                pump_start_time = time(8, 0)
+    
+    # Default to 8:00 AM if we couldn't get a time
+    if not pump_start_time:
+        pump_start_time = time(8, 0)
+    
+    # Combine schedule_date with pump_start_time
+    input_params["pump_start"] = datetime.combine(schedule_date, pump_start_time)
+    print(f"Setting pump_start to: {input_params['pump_start']}")
 
     schedule_data["input_params"] = input_params
-    
-    # Make sure pump_start is a datetime object if it exists in input_params
-    if "pump_start" not in schedule_data["input_params"] or not isinstance(schedule_data["input_params"]["pump_start"], datetime):
-        # Set default to today 8AM if not provided
-        schedule_data["input_params"]["pump_start"] = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
 
     result = await schedules.insert_one(schedule_data)
     
@@ -286,6 +332,11 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     elif schedule_date and isinstance(schedule_date, datetime):
         # Extract just the date part if it's a datetime
         schedule_date = schedule_date.date()
+    else:
+        # If no schedule_date is provided, use today's date
+        schedule_date = datetime.now().date()
+    
+    print(f"Using schedule_date: {schedule_date} for all datetime fields")
     
     if schedule_date:
         availability_check = await check_tm_availability(schedule_date, selected_tms, user_id)
@@ -304,20 +355,39 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     unloading_time_min = get_unloading_time(avg_capacity)
     
     # Get pump start time from the schedule input parameters
-    # If it's already a datetime object, use it directly
+    # If it's already a datetime object, extract the time component
+    pump_start_time = None
     if isinstance(schedule["input_params"].get("pump_start"), datetime):
-        base_time = schedule["input_params"]["pump_start"]
+        pump_start_time = schedule["input_params"]["pump_start"].time()
     else:
         # Try to parse from string if it's not a datetime
         try:
-            base_time = datetime.strptime(schedule["input_params"].get("pump_start", "08:00"), "%H:%M")
-            # Set today's date if only time is provided
-            current_date = schedule_date if schedule_date else datetime.now().date()
-            base_time = datetime.combine(current_date, base_time.time())
+            # Handle MongoDB $date object format
+            if isinstance(schedule["input_params"].get("pump_start"), dict) and "$date" in schedule["input_params"]["pump_start"]:
+                if isinstance(schedule["input_params"]["pump_start"]["$date"], str):
+                    date_str = schedule["input_params"]["pump_start"]["$date"]
+                    pump_start_time = datetime.fromisoformat(date_str.replace("Z", "+00:00")).time()
+                else:
+                    pump_start_time = datetime.fromtimestamp(schedule["input_params"]["pump_start"]["$date"] / 1000).time()
+            else:
+                # Try parsing time string
+                time_str = schedule["input_params"].get("pump_start", "08:00")
+                if isinstance(time_str, str):
+                    if "T" in time_str:  # ISO format with date and time
+                        pump_start_time = datetime.fromisoformat(time_str).time()
+                    else:  # Just time component
+                        pump_start_time = datetime.strptime(time_str, "%H:%M").time()
         except (ValueError, TypeError):
-            # Default to today 8:00 AM if parsing fails
-            current_date = schedule_date if schedule_date else datetime.now().date()
-            base_time = datetime.combine(current_date, datetime.now().time().replace(hour=8, minute=0, second=0, microsecond=0))
+            # Default to 8:00 AM if parsing fails
+            pump_start_time = time(8, 0)
+    
+    # If we couldn't get a time, default to 8:00 AM
+    if not pump_start_time:
+        pump_start_time = time(8, 0)
+        
+    # Combine the schedule date with the pump start time
+    base_time = datetime.combine(schedule_date, pump_start_time)
+    print(f"Base time set to: {base_time}")
 
     onward_time = schedule["input_params"]["onward_time"]
     return_time = schedule["input_params"]["return_time"]
@@ -329,109 +399,135 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     completed_quantity = 0  # Track how much has been completed
     trip_no = 1
     
+    # Track usage count for each TM to prioritize reusing the same TMs
+    tm_usage_count = {tm: 0 for tm in selected_tms}
+    
+    # Track the last used TM to prioritize it if it becomes available soon
+    last_used_tm = None
+    
     # Track when each TM becomes available (returns from its last trip)
     tm_available_times = {tm: base_time for tm in selected_tms}
     
     pump_available_time = base_time  # pump is free at this time
+    
+    # Maximum time to wait for a previously used TM before using a different one (in minutes)
+    max_wait_time = 15  
 
     while remaining_quantity > 0:
-        # Find all TMs that are available, sorted by availability time
-        available_tms = sorted(
-            [tm for tm in selected_tms if tm_available_times[tm] <= pump_available_time + timedelta(minutes=30)],
-            key=lambda tm: tm_available_times[tm]
-        )
+        current_time = pump_available_time
         
+        # Find all TMs that are available now or will be available within acceptable wait time
+        available_tms = []
+        for tm in selected_tms:
+            wait_time = (tm_available_times[tm] - current_time).total_seconds() / 60 if tm_available_times[tm] > current_time else 0
+            if wait_time <= max_wait_time:
+                available_tms.append((tm, wait_time))
+        
+        # If no TMs are available within wait time, take the earliest available TM
         if not available_tms:
-            # If no TMs are available within 30 minutes of when the pump is available,
-            # just take the earliest available TM
-            available_tms = sorted(selected_tms, key=lambda tm: tm_available_times[tm])
-
-        # For the final trips, try to find a TM that can exactly match or get closest to remaining quantity
+            available_tms = [(tm, (tm_available_times[tm] - current_time).total_seconds() / 60) for tm in selected_tms]
+        
+        # Sort the TMs by a composite score:
+        # 1. Prioritize last used TM (if it's available within wait time)
+        # 2. Prioritize TMs with higher usage count (to keep using same TMs)
+        # 3. Prioritize TMs with larger capacities for efficient trips
+        # 4. Consider wait time as a penalty
+        
+        # Final trips: try to find a TM that closely matches remaining quantity
         if remaining_quantity <= max(tm_capacities.values()):
-            # Sort TMs by how closely their capacity matches the remaining quantity
-            available_tms = sorted(
-                available_tms,
-                key=lambda tm: abs(tm_capacities.get(tm, avg_capacity) - remaining_quantity)
-            )
+            available_tms.sort(key=lambda x: (
+                0 if x[0] == last_used_tm else 1,  # Prioritize last used TM
+                -tm_usage_count[x[0]],  # Prioritize TMs that have been used more
+                abs(tm_capacities.get(x[0], avg_capacity) - remaining_quantity),  # Match capacity to remaining quantity
+                x[1]  # Wait time penalty
+            ))
         else:
-            # For non-final trips, prioritize TMs with larger capacities to minimize total trips
-            available_tms = sorted(
-                available_tms,
-                key=lambda tm: (-tm_capacities.get(tm, avg_capacity), tm_available_times[tm])
-            )
+            # For non-final trips: prioritize efficient use of TMs
+            available_tms.sort(key=lambda x: (
+                0 if x[0] == last_used_tm else 1,  # Prioritize last used TM
+                -tm_usage_count[x[0]],  # Prioritize TMs that have been used more
+                -tm_capacities.get(x[0], avg_capacity),  # Prioritize larger capacity
+                x[1]  # Wait time penalty
+            ))
+        
+        # Select the best TM based on our sorting criteria
+        selected_tm, wait_time = available_tms[0]
+        
+        # Get this TM's specific capacity
+        tm_capacity = tm_capacities.get(selected_tm, avg_capacity)
+        
+        # Adjust pump available time if we need to wait for this TM
+        if tm_available_times[selected_tm] > pump_available_time:
+            pump_available_time = tm_available_times[selected_tm]
+        
+        # Calculate earliest possible plant_start time
+        plant_start = tm_available_times[selected_tm]
+        
+        # Calculate when this trip would reach the pump
+        unloading_start = plant_start + timedelta(minutes=onward_time)
+        
+        # If pump isn't available at calculated unloading_start, adjust times
+        if unloading_start < pump_available_time:
+            unloading_start = pump_available_time
+            plant_start = unloading_start - timedelta(minutes=onward_time)
             
-        for tm_id in available_tms:
-            if remaining_quantity <= 0:
-                break
+            # Double-check plant_start isn't before TM is available
+            if plant_start < tm_available_times[selected_tm]:
+                plant_start = tm_available_times[selected_tm]
+                unloading_start = plant_start + timedelta(minutes=onward_time)
+        
+        # Calculate remaining timings
+        pump_start = unloading_start
+        unloading_end = pump_start + timedelta(minutes=unloading_time_min)
+        return_at = unloading_end + timedelta(minutes=return_time)
+        
+        # Use the TM identifier instead of just the ID
+        tm_identifier = tm_map.get(selected_tm, selected_tm)
+        
+        # Update completed quantity and calculate capacity for this trip
+        # Use the TM's actual capacity, but don't exceed remaining quantity
+        trip_capacity = min(tm_capacity, remaining_quantity)
+        
+        # Check if we'd exceed the total required quantity
+        if completed_quantity + trip_capacity > total_quantity:
+            trip_capacity = total_quantity - completed_quantity
+            
+        completed_quantity += trip_capacity
 
-            # Get this TM's specific capacity
-            tm_capacity = tm_capacities.get(tm_id, avg_capacity)
+        # Use datetime objects directly
+        trip = Trip(
+            trip_no=trip_no,
+            tm_no=tm_identifier,
+            tm_id=selected_tm,
+            plant_start=plant_start,
+            pump_start=pump_start,
+            unloading_time=unloading_end,
+            return_=return_at,
+            completed_capacity=completed_quantity
+        )
 
-            # Calculate earliest possible plant_start time (can't be earlier than when TM is available)
-            # This ensures a TM doesn't leave for a trip before returning from previous one
-            plant_start = tm_available_times[tm_id]
-            
-            # Calculate when this trip would reach the pump
-            unloading_start = plant_start + timedelta(minutes=onward_time)
-            
-            # If pump isn't available at calculated unloading_start, adjust times
-            if unloading_start < pump_available_time:
-                unloading_start = pump_available_time
-                plant_start = unloading_start - timedelta(minutes=onward_time)
-                
-                # Double-check plant_start isn't before TM is available
-                if plant_start < tm_available_times[tm_id]:
-                    plant_start = tm_available_times[tm_id]
-                    unloading_start = plant_start + timedelta(minutes=onward_time)
-            
-            # Calculate remaining timings
-            pump_start = unloading_start
-            unloading_end = pump_start + timedelta(minutes=unloading_time_min)
-            return_at = unloading_end + timedelta(minutes=return_time)
-            
-            # Use the TM identifier instead of just the ID
-            tm_identifier = tm_map.get(tm_id, tm_id)
-            
-            # Update completed quantity and calculate capacity for this trip
-            # Use the TM's actual capacity, but don't exceed remaining quantity
-            trip_capacity = min(tm_capacity, remaining_quantity)
-            
-            # Check if we'd exceed the total required quantity
-            if completed_quantity + trip_capacity > total_quantity:
-                trip_capacity = total_quantity - completed_quantity
-                
-            completed_quantity += trip_capacity
+        trips.append(trip)
+        remaining_quantity -= trip_capacity
+        trip_no += 1
+        
+        # Update when this TM will be available next
+        tm_available_times[selected_tm] = return_at
+        
+        # Update usage count and last used TM
+        tm_usage_count[selected_tm] += 1
+        last_used_tm = selected_tm
+        
+        # Update pump availability
+        pump_available_time = unloading_end + timedelta(minutes=buffer_time)
 
-            # Use datetime objects directly
-            trip = Trip(
-                trip_no=trip_no,
-                tm_no=tm_identifier,
-                tm_id=tm_id,
-                plant_start=plant_start,
-                pump_start=pump_start,
-                unloading_time=unloading_end,
-                return_=return_at,
-                completed_capacity=completed_quantity
-            )
-
-            trips.append(trip)
-            remaining_quantity -= trip_capacity
-            trip_no += 1
-            
-            # Update when this TM will be available next
-            tm_available_times[tm_id] = return_at
-            
-            # Update pump availability
-            pump_available_time = unloading_end + timedelta(minutes=buffer_time)
-            
-            # Break after scheduling one trip with the current TM
-            break
+    # Safely serialize the trips to ensure all datetimes are properly converted
+    serialized_trips = safe_serialize([trip.model_dump(by_alias=True) for trip in trips])
 
     # Update schedule
     await schedules.update_one(
         {"_id": ObjectId(schedule_id)},
         {"$set": {
-            "output_table": [trip.model_dump(by_alias=True) for trip in trips],
+            "output_table": serialized_trips,
             "status": "generated",
             "last_updated": datetime.utcnow()
         }}
@@ -444,4 +540,183 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     await update_calendar_after_schedule(schedule_model)
     
     return schedule_model
+
+async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any]]:
+    """
+    Get all scheduled trips for a specific date, grouped by transit mixer.
+    Returns a Gantt-chart friendly format for visualizing the day's schedule.
+    """
+    # Ensure date_val is a date object
+    if isinstance(date_val, str):
+        try:
+            date_val = datetime.fromisoformat(date_val).date()
+        except ValueError:
+            try:
+                date_val = datetime.strptime(date_val, "%Y-%m-%d").date()
+            except ValueError:
+                date_val = datetime.now().date()
+    
+    print(f"Getting daily schedule for date: {date_val}, user_id: {user_id}")
+    
+    # Convert date to datetime range for the day
+    day_start = datetime.combine(date_val, time(0, 0))
+    day_end = datetime.combine(date_val, time(23, 59, 59))
+    
+    print(f"Day range: {day_start} to {day_end}")
+    
+    # Data structure to hold TM schedules
+    tm_schedules = {}
+    
+    # Create a query that handles both string dates and MongoDB dates
+    query = {
+        "user_id": ObjectId(user_id),
+        "$or": [
+            # Match string date format in ISO format
+            {"output_table.plant_start": {"$regex": f"{date_val.isoformat()}"}},
+            {"output_table.return": {"$regex": f"{date_val.isoformat()}"}},
+            # Match datetime objects
+            {"output_table.plant_start": {"$gte": day_start, "$lte": day_end}},
+            {"output_table.return": {"$gte": day_start, "$lte": day_end}},
+            # Handle case where trip spans across the day
+            {
+                "output_table.plant_start": {"$lt": day_start},
+                "output_table.return": {"$gt": day_end}
+            }
+        ]
+    }
+    
+    print(f"Schedule query: {query}")
+    
+    # Find all schedules that have trips on this day
+    schedule_count = 0
+    async for schedule in schedules.find(query):
+        schedule_count += 1
+        client_name = schedule.get("client_name", "Unknown Client")
+        print(f"Found schedule: {schedule['_id']} for client: {client_name}")
+        
+        # For each trip in the schedule
+        trip_count = 0
+        for trip in schedule.get("output_table", []):
+            trip_count += 1
+            tm_id = trip.get("tm_id")
+            if not tm_id:
+                print(f"Trip has no TM ID: {trip}")
+                continue
+                
+            # Get the trip times
+            plant_start = trip.get("plant_start")
+            return_time = trip.get("return")
+            completed_capacity = trip.get("completed_capacity", 0)
+            prev_capacity = 0
+            
+            print(f"Processing trip for TM {tm_id}, plant_start: {plant_start}, return: {return_time}")
+            
+            # Find the previous trip for this TM to calculate the volume for this trip
+            for i, prev_trip in enumerate(schedule.get("output_table", [])):
+                if prev_trip.get("tm_id") == tm_id:
+                    if prev_trip == trip:
+                        break
+                    prev_capacity = prev_trip.get("completed_capacity", 0)
+            
+            trip_volume = completed_capacity - prev_capacity
+            
+            # Convert to datetime if needed
+            if isinstance(plant_start, str):
+                try:
+                    plant_start = datetime.fromisoformat(plant_start)
+                except ValueError:
+                    try:
+                        # Try parsing with different formats if fromisoformat fails
+                        plant_start = datetime.strptime(plant_start, "%Y-%m-%dT%H:%M:%S")
+                    except ValueError:
+                        try:
+                            # Try with timezone format
+                            plant_start = datetime.strptime(plant_start, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        except ValueError:
+                            print(f"Could not parse plant_start: {plant_start}")
+                            continue
+                    
+            if isinstance(return_time, str):
+                try:
+                    return_time = datetime.fromisoformat(return_time)
+                except ValueError:
+                    try:
+                        # Try parsing with different formats if fromisoformat fails
+                        return_time = datetime.strptime(return_time, "%Y-%m-%dT%H:%M:%S")
+                    except ValueError:
+                        try:
+                            # Try with timezone format
+                            return_time = datetime.strptime(return_time, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        except ValueError:
+                            print(f"Could not parse return_time: {return_time}")
+                            continue
+            
+            # Handle if the values are MongoDB date objects
+            if isinstance(plant_start, dict) and "$date" in plant_start:
+                if isinstance(plant_start["$date"], str):
+                    plant_start = datetime.fromisoformat(plant_start["$date"].replace("Z", "+00:00"))
+                else:
+                    plant_start = datetime.fromtimestamp(plant_start["$date"] / 1000)
+                
+            if isinstance(return_time, dict) and "$date" in return_time:
+                if isinstance(return_time["$date"], str):
+                    return_time = datetime.fromisoformat(return_time["$date"].replace("Z", "+00:00"))
+                else:
+                    return_time = datetime.fromtimestamp(return_time["$date"] / 1000)
+            
+            print(f"Parsed times - plant_start: {plant_start}, return: {return_time}")
+            
+            # Check if trip overlaps with our target day
+            if (plant_start > day_end) or (return_time < day_start):
+                print(f"Trip does not overlap with target day")
+                continue
+                
+            # Adjust times if they span beyond this day
+            if plant_start < day_start:
+                plant_start = day_start
+                
+            if return_time > day_end:
+                return_time = day_end
+            
+            # Get the TM identifier
+            tm_identifier = await get_tm_identifier(tm_id, user_id)
+            
+            # Add to the data structure
+            if tm_id not in tm_schedules:
+                tm_schedules[tm_id] = {
+                    "tm": tm_identifier,
+                    "trips": []
+                }
+                
+            # Add this trip
+            tm_schedules[tm_id]["trips"].append({
+                "client": client_name,
+                "start": plant_start.strftime("%H:%M"),
+                "end": return_time.strftime("%H:%M"),
+                "volume": f"{trip_volume} m³"
+            })
+            print(f"Added trip to TM {tm_id}: {plant_start.strftime('%H:%M')} - {return_time.strftime('%H:%M')}")
+        
+        print(f"Processed {trip_count} trips for schedule {schedule['_id']}")
+    
+    print(f"Found {schedule_count} schedules for date {date_val}")
+    
+    # Convert to list and sort
+    result = list(tm_schedules.values())
+    
+    # Sort by TM identifier
+    result.sort(key=lambda x: x["tm"])
+    
+    print(f"Returning {len(result)} TM schedules")
+    return result
+
+async def get_tm_identifier(tm_id: str, user_id: str) -> str:
+    """Helper function to get the TM identifier (registration number) from its ID"""
+    from app.db.mongodb import transit_mixers
+    
+    # Try to get the TM identifier from the database
+    tm = await transit_mixers.find_one({"_id": ObjectId(tm_id), "user_id": ObjectId(user_id)})
+    if tm:
+        return tm.get("identifier", tm_id)
+    return tm_id
 

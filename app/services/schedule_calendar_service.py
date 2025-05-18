@@ -17,9 +17,34 @@ async def get_calendar_for_date_range(
     """Get calendar data for a date range with 30-minute time slots from 8AM to 8PM"""
     calendar_data = []
     
+    # Ensure dates are valid date objects
+    start_date = query.start_date
+    end_date = query.end_date
+    
+    # If start_date or end_date is a string, parse it
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.fromisoformat(start_date).date()
+        except ValueError:
+            try:
+                start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            except ValueError:
+                start_date = datetime.now().date()
+    
+    if isinstance(end_date, str):
+        try:
+            end_date = datetime.fromisoformat(end_date).date()
+        except ValueError:
+            try:
+                end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except ValueError:
+                end_date = datetime.now().date()
+    
     # Convert date objects to datetime objects for MongoDB compatibility
-    start_datetime = datetime.combine(query.start_date, time.min)
-    end_datetime = datetime.combine(query.end_date, time.max)
+    start_datetime = datetime.combine(start_date, time.min)
+    end_datetime = datetime.combine(end_date, time.max)
+    
+    print(f"Fetching calendar for date range: {start_datetime} to {end_datetime}, user_id: {user_id}")
     
     # Find all calendar entries in the given date range
     query_filter = {
@@ -36,24 +61,42 @@ async def get_calendar_for_date_range(
     if query.tm_id:
         query_filter["time_slots.tm_availability.tm_id"] = query.tm_id
     
+    print(f"Calendar query filter: {query_filter}")
+    
+    entry_count = 0
     async for day_schedule in schedule_calendar.find(query_filter).sort("date", 1):
+        entry_count += 1
+        print(f"Found calendar entry for date: {day_schedule.get('date')}")
         calendar_data.append(DailySchedule(**day_schedule))
+    
+    print(f"Found {entry_count} existing calendar entries")
     
     # If no entries found for some dates, initialize them
     existing_dates = {cal.date.date() if isinstance(cal.date, datetime) else cal.date for cal in calendar_data}
+    print(f"Existing dates: {existing_dates}")
     
-    current_date = query.start_date
-    while current_date <= query.end_date:
+    current_date = start_date
+    initialized_count = 0
+    while current_date <= end_date:
+        print(f"Checking if date {current_date} exists in calendar")
         if current_date not in existing_dates:
+            print(f"Date {current_date} not found in calendar, initializing...")
             # Initialize new calendar day with TMs
             new_day = await initialize_calendar_day(current_date, user_id)
             if new_day:
+                print(f"Successfully initialized calendar for date {current_date}")
                 calendar_data.append(new_day)
+                initialized_count += 1
+            else:
+                print(f"Failed to initialize calendar for date {current_date}")
         current_date += timedelta(days=1)
+    
+    print(f"Initialized {initialized_count} new calendar days")
     
     # Sort by date
     calendar_data.sort(key=lambda x: x.date)
     
+    print(f"Returning {len(calendar_data)} calendar days in total")
     return calendar_data
 
 async def initialize_calendar_day(
@@ -70,10 +113,16 @@ async def initialize_calendar_day(
             try:
                 day_date = datetime.strptime(day_date, "%Y-%m-%d").date()
             except ValueError:
-                # As a last resort, use today's date
-                day_date = datetime.now().date()
+                try:
+                    # Try parsing with different formats
+                    day_date = datetime.strptime(day_date, "%Y-%m-%dT%H:%M:%S").date()
+                except ValueError:
+                    # As a last resort, use today's date
+                    day_date = datetime.now().date()
     elif isinstance(day_date, datetime):
         day_date = day_date.date()
+    
+    print(f"Initializing calendar day for date: {day_date}, user_id: {user_id}")
     
     # Get all TMs for this user
     tm_list = []
@@ -100,6 +149,7 @@ async def initialize_calendar_day(
         }
     
     if not tm_plants:
+        print(f"No transit mixers found for user {user_id}")
         return None
         
     # Use datetime object for MongoDB compatibility
@@ -144,14 +194,27 @@ async def initialize_calendar_day(
     day_datetime_start = datetime.combine(day_date, time(0, 0))
     day_datetime_end = datetime.combine(day_date, time(23, 59, 59))
     
+    print(f"Searching for schedules from {day_datetime_start} to {day_datetime_end}")
+    
     # Get all schedules for this day
-    async for schedule in schedules.find({
+    schedule_query = {
         "user_id": ObjectId(user_id),
         "$or": [
+            # Match strings in ISO format
+            {"output_table.plant_start": {"$regex": f"{day_date.isoformat()}"}},
+            {"output_table.return": {"$regex": f"{day_date.isoformat()}"}},
+            # Match actual datetime objects
             {"output_table.plant_start": {"$gte": day_datetime_start, "$lte": day_datetime_end}},
             {"output_table.return": {"$gte": day_datetime_start, "$lte": day_datetime_end}}
         ]
-    }):
+    }
+    
+    print(f"Schedule query: {schedule_query}")
+    
+    schedule_count = 0
+    async for schedule in schedules.find(schedule_query):
+        schedule_count += 1
+        print(f"Found schedule: {schedule['_id']}")
         # For each trip in the schedule, mark the TM as busy
         for trip in schedule.get("output_table", []):
             tm_id = trip.get("tm_id")
@@ -162,18 +225,47 @@ async def initialize_calendar_day(
             plant_start = trip.get("plant_start")
             return_time = trip.get("return")
             
+            print(f"Processing trip for TM {tm_id}, plant_start: {plant_start}, return: {return_time}")
+            
             # Convert to datetime if needed
             if isinstance(plant_start, str):
                 try:
                     plant_start = datetime.fromisoformat(plant_start)
                 except ValueError:
-                    continue
+                    try:
+                        # Try parsing with different formats if fromisoformat fails
+                        plant_start = datetime.strptime(plant_start, "%Y-%m-%dT%H:%M:%S")
+                    except ValueError:
+                        try:
+                            # Try with timezone format
+                            plant_start = datetime.strptime(plant_start, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        except ValueError:
+                            print(f"Could not parse plant_start: {plant_start}")
+                            continue
                     
             if isinstance(return_time, str):
                 try:
                     return_time = datetime.fromisoformat(return_time)
                 except ValueError:
-                    continue
+                    try:
+                        # Try parsing with different formats if fromisoformat fails
+                        return_time = datetime.strptime(return_time, "%Y-%m-%dT%H:%M:%S")
+                    except ValueError:
+                        try:
+                            # Try with timezone format
+                            return_time = datetime.strptime(return_time, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        except ValueError:
+                            print(f"Could not parse return_time: {return_time}")
+                            continue
+            
+            # Handle if the values are already datetime objects from MongoDB
+            if isinstance(plant_start, dict) and "$date" in plant_start:
+                plant_start = datetime.fromtimestamp(plant_start["$date"] / 1000)
+                
+            if isinstance(return_time, dict) and "$date" in return_time:
+                return_time = datetime.fromtimestamp(return_time["$date"] / 1000)
+            
+            print(f"Parsed times - plant_start: {plant_start}, return: {return_time}")
             
             # Update all time slots that overlap with this trip
             for time_slot in calendar_day["time_slots"]:
@@ -188,10 +280,14 @@ async def initialize_calendar_day(
                             # Mark the TM as booked
                             time_slot["tm_availability"][i]["status"] = "booked"
                             time_slot["tm_availability"][i]["schedule_id"] = str(schedule["_id"])
+                            print(f"Marked TM {tm_id} as booked for slot {slot_start}-{slot_end}")
                             break
+    
+    print(f"Found {schedule_count} schedules for day {day_date}")
     
     # Save to database
     result = await schedule_calendar.insert_one(calendar_day)
+    print(f"Calendar day saved with ID: {result.inserted_id}")
     
     # Return the calendar day
     return DailySchedule(**await schedule_calendar.find_one({"_id": result.inserted_id}))
@@ -219,50 +315,187 @@ async def get_tm_availability(
     elif isinstance(date_val, datetime):
         date_val = date_val.date()
         
-    # Convert date to datetime for MongoDB compatibility
-    date_datetime = datetime.combine(date_val, time.min)
+    # Generate default availability time slots (all available)
+    availability_slots = generate_default_availability()
     
-    # Try both date and datetime formats
-    calendar = await schedule_calendar.find_one({
-        "date": date_datetime,
-        "user_id": ObjectId(user_id)
-    })
+    # Convert date to date range for the day
+    day_start = datetime.combine(date_val, time(0, 0))
+    day_end = datetime.combine(date_val, time(23, 59, 59))
     
-    if not calendar:
-        # Initialize calendar day
-        calendar_day = await initialize_calendar_day(date_val, user_id)
-        if not calendar_day:
-            return []
+    # Find all schedules that have this TM occupied on this date
+    from app.db.mongodb import schedules
+    
+    try:
+        # Query schedules collection directly
+        async for schedule in schedules.find({
+            "user_id": ObjectId(user_id),
+            "output_table": {
+                "$elemMatch": {
+                    "tm_id": tm_id,
+                    "$or": [
+                        {"plant_start": {"$gte": day_start, "$lte": day_end}},
+                        {"return": {"$gte": day_start, "$lte": day_end}},
+                        # Handle trips that span across the day
+                        {"plant_start": {"$lt": day_start}, "return": {"$gt": day_end}}
+                    ]
+                }
+            }
+        }):
+            # For each trip in this schedule involving this TM
+            for trip in schedule.get("output_table", []):
+                if trip.get("tm_id") != tm_id:
+                    continue
+                    
+                # Get departure and return times
+                plant_start = trip.get("plant_start")
+                return_time = trip.get("return")
+                
+                # Convert to datetime if needed
+                if isinstance(plant_start, str):
+                    try:
+                        plant_start = datetime.fromisoformat(plant_start)
+                    except ValueError:
+                        continue
+                        
+                if isinstance(return_time, str):
+                    try:
+                        return_time = datetime.fromisoformat(return_time)
+                    except ValueError:
+                        continue
+                
+                # Check if the trip is on this day
+                if plant_start.date() > date_val or return_time.date() < date_val:
+                    continue
+                    
+                # Trim times to day boundaries if they extend beyond
+                if plant_start < day_start:
+                    plant_start = day_start
+                if return_time > day_end:
+                    return_time = day_end
+                
+                # Mark all slots that overlap with this trip as "booked"
+                for i, slot in enumerate(availability_slots):
+                    # Convert slot times to datetime objects
+                    slot_start_str = slot["start_time"]
+                    slot_end_str = slot["end_time"]
+                    
+                    slot_start = datetime.combine(
+                        date_val, 
+                        datetime.strptime(slot_start_str, "%H:%M").time()
+                    )
+                    slot_end = datetime.combine(
+                        date_val,
+                        datetime.strptime(slot_end_str, "%H:%M").time()
+                    )
+                    
+                    # If this slot overlaps with the trip time, mark as booked
+                    if plant_start < slot_end and return_time > slot_start:
+                        availability_slots[i]["status"] = "booked"
+                        # Convert ObjectId to string for JSON serialization
+                        schedule_id = schedule.get("_id")
+                        if isinstance(schedule_id, ObjectId):
+                            schedule_id = str(schedule_id)
+                        availability_slots[i]["schedule_id"] = schedule_id
+    except Exception as e:
+        print(f"Error checking TM availability: {str(e)}")
+        # If there's an error, return default availability
+        import logging
+        logging.error(f"Error in get_tm_availability: {str(e)}")
         
-        # Extract availability data for this TM
-        tm_availability = []
-        for time_slot in calendar_day.time_slots:
-            for tm_avail in time_slot.tm_availability:
-                if tm_avail.tm_id == tm_id:
-                    tm_availability.append({
-                        "start_time": time_slot.start_time,
-                        "end_time": time_slot.end_time,
-                        "status": tm_avail.status,
-                        "schedule_id": tm_avail.schedule_id
-                    })
-                    break
-        
-        return tm_availability
+    # Return the availability slots
+    return availability_slots
+
+def extract_tm_availability(calendar: Dict, tm_id: str) -> List[Dict[str, Any]]:
+    """Helper function to extract TM availability from calendar data"""
+    from app.schemas.utils import safe_serialize
     
-    # Extract availability data for this TM
     tm_availability = []
-    for time_slot in calendar["time_slots"]:
-        for tm_avail in time_slot["tm_availability"]:
-            if tm_avail["tm_id"] == tm_id:
-                tm_availability.append({
-                    "start_time": time_slot["start_time"],
-                    "end_time": time_slot["end_time"],
-                    "status": tm_avail["status"],
-                    "schedule_id": tm_avail["schedule_id"]
-                })
+    
+    # Handle both model objects and raw dictionaries
+    time_slots = calendar.get("time_slots", [])
+    if hasattr(calendar, "time_slots"):
+        time_slots = calendar.time_slots
+        
+    for time_slot in time_slots:
+        # Handle both model objects and raw dictionaries
+        start_time = time_slot.get("start_time") if isinstance(time_slot, dict) else time_slot.start_time
+        end_time = time_slot.get("end_time") if isinstance(time_slot, dict) else time_slot.end_time
+        tm_avail_list = time_slot.get("tm_availability", []) if isinstance(time_slot, dict) else time_slot.tm_availability
+        
+        # Convert datetime objects to strings to ensure JSON serialization
+        if isinstance(start_time, (datetime, date)):
+            if isinstance(start_time, datetime):
+                start_time = start_time.strftime("%H:%M")
+            else:
+                start_time = datetime.combine(start_time, time(0, 0)).strftime("%H:%M")
+                
+        if isinstance(end_time, (datetime, date)):
+            if isinstance(end_time, datetime):
+                end_time = end_time.strftime("%H:%M")
+            else:
+                end_time = datetime.combine(end_time, time(0, 0)).strftime("%H:%M")
+        
+        # Find availability for this specific TM
+        found = False
+        for tm_avail in tm_avail_list:
+            # Handle both model objects and raw dictionaries
+            current_tm_id = tm_avail.get("tm_id") if isinstance(tm_avail, dict) else tm_avail.tm_id
+            
+            # Convert ObjectId to string for comparison if needed
+            if isinstance(current_tm_id, ObjectId):
+                current_tm_id = str(current_tm_id)
+                
+            if current_tm_id == tm_id:
+                status = tm_avail.get("status") if isinstance(tm_avail, dict) else tm_avail.status
+                schedule_id = tm_avail.get("schedule_id") if isinstance(tm_avail, dict) else tm_avail.schedule_id
+                
+                # Convert ObjectId to string if needed
+                if isinstance(schedule_id, ObjectId):
+                    schedule_id = str(schedule_id)
+                
+                slot_data = {
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "status": status,
+                    "schedule_id": schedule_id
+                }
+                
+                tm_availability.append(slot_data)
+                found = True
                 break
+        
+        # If TM not found in this slot, mark as unknown/error
+        if not found:
+            tm_availability.append({
+                "start_time": start_time,
+                "end_time": end_time,
+                "status": "unknown",
+                "schedule_id": None
+            })
     
     return tm_availability
+
+def generate_default_availability() -> List[Dict[str, Any]]:
+    """Generate default availability time slots if calendar isn't available"""
+    default_slots = []
+    
+    # Generate hourly slots from 8AM to 8PM
+    start_hour = 8
+    end_hour = 20
+    
+    for hour in range(start_hour, end_hour):
+        # Create slot in HH:MM format
+        slot_start = f"{hour:02d}:00"
+        slot_end = f"{hour+1:02d}:00"
+        
+        default_slots.append({
+            "start_time": slot_start,
+            "end_time": slot_end,
+            "status": "available",
+            "schedule_id": None
+        })
+    
+    return default_slots
 
 async def update_calendar_after_schedule(schedule: ScheduleModel) -> bool:
     """

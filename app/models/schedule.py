@@ -12,6 +12,14 @@ class InputParams(BaseModel):
     buffer_time: int
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
     schedule_date: date = Field(default_factory=lambda: datetime.now().date())
+    
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        json_encoders={
+            date: lambda d: d.isoformat() if isinstance(d, date) else d,
+            datetime: lambda dt: dt.isoformat() if isinstance(dt, datetime) else dt
+        }
+    )
 
 class Trip(BaseModel):
     trip_no: int
@@ -25,7 +33,9 @@ class Trip(BaseModel):
     
     model_config = ConfigDict(
         populate_by_name=True,
-        json_encoders={datetime: lambda dt: dt.isoformat()},
+        json_encoders={
+            datetime: lambda dt: dt.isoformat() if isinstance(dt, datetime) else dt
+        },
         json_schema_extra={
             "example": {
                 "trip_no": 1,
@@ -57,7 +67,11 @@ class ScheduleModel(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, date: lambda d: d.isoformat()},
+        json_encoders={
+            ObjectId: str, 
+            date: lambda d: d.isoformat() if isinstance(d, date) else d,
+            datetime: lambda dt: dt.isoformat() if isinstance(dt, datetime) else dt
+        },
         json_schema_extra={
             "example": {
                 "user_id": "60d5ec9af682fcd81a060e72",

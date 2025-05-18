@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.client import ClientModel, ClientCreate, ClientUpdate
 from app.models.user import UserModel
 from app.services.client_service import (
-    get_all_clients, get_client, create_client, update_client, delete_client, get_client_schedules
+    get_all_clients, get_client, create_client, update_client, delete_client, get_client_schedules, get_client_stats
 )
 from app.services.auth_service import get_current_user
-from typing import List, Dict
+from typing import List, Dict, Any
 from app.schemas.response import StandardResponse
 
 router = APIRouter(tags=["Clients"])
@@ -144,4 +144,35 @@ async def read_client_schedules(
         success=True,
         message="Client schedules retrieved successfully",
         data=result
+    )
+
+@router.get("/{client_id}/stats", response_model=StandardResponse[Dict[str, Any]])
+async def read_client_stats(
+    client_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Retrieve statistics for a specific client.
+    
+    Path parameter:
+    - client_id: The ID of the client
+    
+    Returns statistics including:
+    - Total scheduled volume
+    - Total delivered volume
+    - Pending delivery volume
+    - Recent trip summaries
+    """
+    client = await get_client(client_id, str(current_user.id))
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Client not found"
+        )
+    
+    stats = await get_client_stats(client_id, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Client statistics retrieved successfully",
+        data=stats
     ) 

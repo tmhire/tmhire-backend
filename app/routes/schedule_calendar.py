@@ -34,6 +34,7 @@ async def get_calendar(
     
     This endpoint is used to populate calendar views showing daily TM availability.
     """
+    print(f"Calendar query: start_date={query.start_date}, end_date={query.end_date}")
     calendar_data = await get_calendar_for_date_range(query, str(current_user.id))
     return StandardResponse(
         success=True,
