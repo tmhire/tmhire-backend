@@ -7,14 +7,17 @@ from datetime import datetime, timedelta, date, time
 from bson import ObjectId
 from typing import List, Optional, Dict, Any
 from app.schemas.utils import safe_serialize
+import math
 
 # Unloading time lookup table
 UNLOADING_TIME_LOOKUP = {
+    4: 7,
     6: 10,
     7: 12,
     8: 14,
-    9: 16,
-    10: 18
+    9: 15,
+    10: 17,
+    12: 20
 }
 
 async def get_all_schedules(user_id: str) -> List[ScheduleModel]:
@@ -159,9 +162,33 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     if avg_capacity == 0:
         raise ValueError("Cannot calculate TM count, average capacity is 0. Add TMs first.")
 
-    import math
-    tm_count = math.ceil(schedule.input_params.quantity / avg_capacity)
-    tm_identifiers = [chr(65 + i) for i in range(tm_count)]  # Generate TM identifiers (A, B, C, ...)
+    # Get input parameters
+    quantity = schedule.input_params.quantity
+    pumping_speed = schedule.input_params.pumping_speed
+    onward_time = schedule.input_params.onward_time
+    return_time = schedule.input_params.return_time
+    buffer_time = schedule.input_params.buffer_time
+
+    # Calculate cycle time components
+    unloading_time = get_unloading_time(avg_capacity)
+    cycle_time = onward_time + return_time + buffer_time + unloading_time
+    
+    # Calculate pumping time
+    pumping_time = quantity / pumping_speed
+    
+    # Calculate required number of TMs using the formula:
+    # TMs = (Quantity × Cycle Time) / (Pumping Time × TM Capacity)
+    tm_count = math.ceil((quantity * cycle_time) / (pumping_time * avg_capacity))
+    
+    # Calculate total trips needed
+    total_trips = math.ceil(quantity / avg_capacity)
+    
+    # Calculate trips per TM and remaining trips
+    base_trips_per_tm = total_trips // tm_count
+    remaining_trips = total_trips % tm_count
+    
+    # Generate TM identifiers (A, B, C, ...)
+    tm_identifiers = [chr(65 + i) for i in range(tm_count)]
 
     # Get client information
     client_name = schedule.client_name
@@ -177,6 +204,10 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     schedule_data["last_updated"] = datetime.utcnow()
     schedule_data["status"] = "draft"
     schedule_data["tm_count"] = tm_count
+    schedule_data["total_trips"] = total_trips
+    schedule_data["trips_per_tm"] = base_trips_per_tm
+    schedule_data["remaining_trips"] = remaining_trips
+    schedule_data["cycle_time"] = cycle_time
     schedule_data["output_table"] = []
     
     # Convert client_id to ObjectId
@@ -253,7 +284,11 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     return {
         "schedule_id": str(result.inserted_id),
         "tm_count": tm_count,
-        "tm_identifiers": tm_identifiers
+        "tm_identifiers": tm_identifiers,
+        "total_trips": total_trips,
+        "trips_per_tm": base_trips_per_tm,
+        "remaining_trips": remaining_trips,
+        "cycle_time": cycle_time
     }
 
 async def check_tm_availability(schedule_date: date, selected_tms: List[str], user_id: str) -> Dict:
@@ -399,11 +434,8 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     completed_quantity = 0  # Track how much has been completed
     trip_no = 1
     
-    # Track usage count for each TM to prioritize reusing the same TMs
+    # Track usage count for each TM to ensure even distribution
     tm_usage_count = {tm: 0 for tm in selected_tms}
-    
-    # Track the last used TM to prioritize it if it becomes available soon
-    last_used_tm = None
     
     # Track when each TM becomes available (returns from its last trip)
     tm_available_times = {tm: base_time for tm in selected_tms}
@@ -418,37 +450,36 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
         
         # Find all TMs that are available now or will be available within acceptable wait time
         available_tms = []
-        for tm in selected_tms:
-            wait_time = (tm_available_times[tm] - current_time).total_seconds() / 60 if tm_available_times[tm] > current_time else 0
-            if wait_time <= max_wait_time:
-                available_tms.append((tm, wait_time))
+        min_usage_count = min(tm_usage_count.values())  # Get the minimum usage count
         
-        # If no TMs are available within wait time, take the earliest available TM
+        # First try to find TMs that haven't been used as much
+        for tm in selected_tms:
+            if tm_usage_count[tm] == min_usage_count:
+                wait_time = (tm_available_times[tm] - current_time).total_seconds() / 60 if tm_available_times[tm] > current_time else 0
+                if wait_time <= max_wait_time:
+                    available_tms.append((tm, wait_time))
+        
+        # If no TMs with minimum usage count are available within wait time,
+        # consider all TMs
+        if not available_tms:
+            for tm in selected_tms:
+                wait_time = (tm_available_times[tm] - current_time).total_seconds() / 60 if tm_available_times[tm] > current_time else 0
+                if wait_time <= max_wait_time:
+                    available_tms.append((tm, wait_time))
+        
+        # If still no TMs are available within wait time, take the earliest available TM
         if not available_tms:
             available_tms = [(tm, (tm_available_times[tm] - current_time).total_seconds() / 60) for tm in selected_tms]
         
-        # Sort the TMs by a composite score:
-        # 1. Prioritize last used TM (if it's available within wait time)
-        # 2. Prioritize TMs with higher usage count (to keep using same TMs)
-        # 3. Prioritize TMs with larger capacities for efficient trips
-        # 4. Consider wait time as a penalty
-        
-        # Final trips: try to find a TM that closely matches remaining quantity
-        if remaining_quantity <= max(tm_capacities.values()):
-            available_tms.sort(key=lambda x: (
-                0 if x[0] == last_used_tm else 1,  # Prioritize last used TM
-                -tm_usage_count[x[0]],  # Prioritize TMs that have been used more
-                abs(tm_capacities.get(x[0], avg_capacity) - remaining_quantity),  # Match capacity to remaining quantity
-                x[1]  # Wait time penalty
-            ))
-        else:
-            # For non-final trips: prioritize efficient use of TMs
-            available_tms.sort(key=lambda x: (
-                0 if x[0] == last_used_tm else 1,  # Prioritize last used TM
-                -tm_usage_count[x[0]],  # Prioritize TMs that have been used more
-                -tm_capacities.get(x[0], avg_capacity),  # Prioritize larger capacity
-                x[1]  # Wait time penalty
-            ))
+        # Sort TMs by:
+        # 1. Usage count (prefer less used TMs)
+        # 2. Wait time (prefer shorter wait times)
+        # 3. Capacity (prefer larger capacity for efficiency)
+        available_tms.sort(key=lambda x: (
+            tm_usage_count[x[0]],  # Prioritize less used TMs
+            x[1],  # Wait time
+            -tm_capacities.get(x[0], avg_capacity)  # Prefer larger capacity
+        ))
         
         # Select the best TM based on our sorting criteria
         selected_tm, wait_time = available_tms[0]
@@ -513,9 +544,8 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
         # Update when this TM will be available next
         tm_available_times[selected_tm] = return_at
         
-        # Update usage count and last used TM
+        # Update usage count
         tm_usage_count[selected_tm] += 1
-        last_used_tm = selected_tm
         
         # Update pump availability
         pump_available_time = unloading_end + timedelta(minutes=buffer_time)
