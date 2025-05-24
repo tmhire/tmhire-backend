@@ -171,7 +171,7 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
 
     # Calculate cycle time components
     unloading_time = get_unloading_time(avg_capacity)
-    cycle_time = onward_time + return_time + buffer_time + unloading_time
+    cycle_time = (onward_time + return_time + buffer_time + unloading_time)/60
     
     # Calculate pumping time
     pumping_time = quantity / pumping_speed
@@ -187,9 +187,6 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     base_trips_per_tm = total_trips // tm_count
     remaining_trips = total_trips % tm_count
     
-    # Generate TM identifiers (A, B, C, ...)
-    tm_identifiers = [chr(65 + i) for i in range(tm_count)]
-
     # Get client information
     client_name = schedule.client_name
     if schedule.client_id:
@@ -284,7 +281,6 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     return {
         "schedule_id": str(result.inserted_id),
         "tm_count": tm_count,
-        "tm_identifiers": tm_identifiers,
         "total_trips": total_trips,
         "trips_per_tm": base_trips_per_tm,
         "remaining_trips": remaining_trips,
