@@ -10,6 +10,18 @@ CALENDAR_START_HOUR = 8  # 8AM
 CALENDAR_END_HOUR = 20   # 8PM
 SLOT_DURATION_MINUTES = 30
 
+def _get_valid_date(date: date) -> date:
+    # If date is a string, parse it
+    if isinstance(date, str):
+        try:
+            date = datetime.fromisoformat(date).date()
+        except ValueError:
+            try:
+                date = datetime.strptime(date, "%Y-%m-%d").date()
+            except ValueError:
+                date = datetime.now().date()
+    return date
+
 async def get_calendar_for_date_range(
     query: ScheduleCalendarQuery, 
     user_id: str
@@ -18,27 +30,8 @@ async def get_calendar_for_date_range(
     calendar_data = []
     
     # Ensure dates are valid date objects
-    start_date = query.start_date
-    end_date = query.end_date
-    
-    # If start_date or end_date is a string, parse it
-    if isinstance(start_date, str):
-        try:
-            start_date = datetime.fromisoformat(start_date).date()
-        except ValueError:
-            try:
-                start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-            except ValueError:
-                start_date = datetime.now().date()
-    
-    if isinstance(end_date, str):
-        try:
-            end_date = datetime.fromisoformat(end_date).date()
-        except ValueError:
-            try:
-                end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-            except ValueError:
-                end_date = datetime.now().date()
+    start_date = _get_valid_date(query.start_date)
+    end_date = _get_valid_date(query.end_date)
     
     # Convert date objects to datetime objects for MongoDB compatibility
     start_datetime = datetime.combine(start_date, time.min)
@@ -292,6 +285,28 @@ async def initialize_calendar_day(
     # Return the calendar day
     return DailySchedule(**await schedule_calendar.find_one({"_id": result.inserted_id}))
 
+def _ensure_dateobj(date: datetime | str) -> date:
+    # Convert date to date object if it's a string
+    if date and isinstance(date, str):
+        try:
+            # Try ISO format first (YYYY-MM-DD)
+            date = datetime.fromisoformat(date).date()
+        except ValueError:
+            # If that fails, try other common formats
+            try:
+                date = datetime.strptime(date, "%Y-%m-%d").date()
+            except ValueError:
+                # As a last resort, use today's date
+                date = datetime.now().date()
+    elif date and isinstance(date, datetime):
+        # Extract just the date part if it's a datetime
+        date = date.date()
+    else:
+        # If no date is provided, use today's date
+        date = datetime.now().date()
+        
+    return date
+
 async def get_tm_availability(
     date_val: date,
     tm_id: str,
@@ -302,18 +317,7 @@ async def get_tm_availability(
     Returns the status for each time slot from 8AM to 8PM.
     """
     # Ensure date_val is a date object
-    if isinstance(date_val, str):
-        try:
-            # Try ISO format first (YYYY-MM-DD)
-            date_val = datetime.fromisoformat(date_val).date()
-        except ValueError:
-            try:
-                date_val = datetime.strptime(date_val, "%Y-%m-%d").date()
-            except ValueError:
-                # As a last resort, use today's date
-                date_val = datetime.now().date()
-    elif isinstance(date_val, datetime):
-        date_val = date_val.date()
+    date_val = _ensure_dateobj(date_val)
         
     # Generate default availability time slots (all available)
     availability_slots = generate_default_availability()
@@ -336,7 +340,7 @@ async def get_tm_availability(
                         {"plant_start": {"$gte": day_start, "$lte": day_end}},
                         {"return": {"$gte": day_start, "$lte": day_end}},
                         # Handle trips that span across the day
-                        {"plant_start": {"$lt": day_start}, "return": {"$gt": day_end}}
+                        # {"plant_start": {"$lt": day_start}, "return": {"$gt": day_end}}
                     ]
                 }
             }
