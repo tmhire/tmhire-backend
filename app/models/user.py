@@ -7,6 +7,7 @@ from bson import ObjectId
 class UserModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     email: EmailStr
+    password: Optional[str] = None
     name: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -25,6 +26,7 @@ class UserModel(BaseModel):
 
 class UserCreate(BaseModel):
     email: EmailStr
+    password: Optional[str] = None
     name: str
     
     model_config = ConfigDict(
@@ -35,3 +37,7 @@ class UserCreate(BaseModel):
             }
         }
     ) 
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
