@@ -31,11 +31,31 @@ class Token(BaseModel):
             }
         }
 
+class TokenWithNewUser(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+    new_user: str
+    company: str
+    city: str
+    contact: int
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyQGV4YW1wbGUuY29tIiwiZXhwIjoxNjI1MTcyODAwfQ.signature",
+                "token_type": "bearer"
+            }
+        }
+
 class User(BaseModel):
     id: str
     name: str
     email: str
     new_user: bool
+    company: str
+    city: str
+    contact: int
     access_token: str
     refresh_token: str
     token_type: str
@@ -75,6 +95,9 @@ async def signup(user_data: UserCreate):
                 "name": user.name,
                 "email": user.email,
                 "new_user": user.new_user,
+                "company": user.company,
+                "city": user.city,
+                "contact": user.contact,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
@@ -115,6 +138,9 @@ async def login_user(user_data: UserLogin):
                 "name": user.name,
                 "email": user.email,
                 "new_user": user.new_user,
+                "company": user.company,
+                "city": user.city,
+                "contact": user.contact,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
@@ -133,7 +159,7 @@ async def login_user(user_data: UserLogin):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-@router.post("/google", response_model=StandardResponse[Token])
+@router.post("/google", response_model=StandardResponse[TokenWithNewUser])
 async def login_google(token_data: GoogleToken):
     """
     Authenticate using Google Single Sign-On.
@@ -176,6 +202,10 @@ async def login_google(token_data: GoogleToken):
         )
 
         token_data = {
+            "new_user": user.new_user,
+            "company": user.company,
+            "city": user.city,
+            "contact": user.contact,
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer"
