@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from typing import Optional, Literal
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 
@@ -10,6 +10,7 @@ class TransitMixerModel(BaseModel):
     plant_id: Optional[PyObjectId] = None
     identifier: str
     capacity: float
+    status: Literal["active", "inactive"] = Field(default="active")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -22,6 +23,7 @@ class TransitMixerModel(BaseModel):
                 "plant_id": "60d5ec9af682fcd81a060e73",
                 "identifier": "TM-A",
                 "capacity": 8.0,
+                "status": "active",
                 "created_at": datetime.utcnow()
             }
         }
@@ -31,13 +33,15 @@ class TransitMixerCreate(BaseModel):
     plant_id: str
     identifier: str
     capacity: float
+    status: Literal["active", "inactive"] = Field(default="active")
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "plant_id": "60d5ec9af682fcd81a060e73",
                 "identifier": "TM-A",
-                "capacity": 8.0
+                "capacity": 8.0,
+                "status": "active"
             }
         }
     )
@@ -46,13 +50,26 @@ class TransitMixerUpdate(BaseModel):
     plant_id: Optional[str] = None
     identifier: Optional[str] = None
     capacity: Optional[float] = None
+    status: Optional[Literal["active", "inactive"]] = None
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "plant_id": "60d5ec9af682fcd81a060e74",
                 "identifier": "TM-B",
-                "capacity": 9.0
+                "capacity": 9.0,
+                "status": "inactive"
+            }
+        }
+    )
+
+class TransitMixerStatusToggle(BaseModel):
+    status: Literal["active", "inactive"]
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "inactive"
             }
         }
     )

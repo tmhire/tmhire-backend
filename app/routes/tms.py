@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, TransitMixerUpdate, AverageCapacity
+from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, TransitMixerStatusToggle, TransitMixerUpdate, AverageCapacity
 from app.models.user import UserModel
 from app.services.tm_service import (
     get_all_tms, get_tm, create_tm, update_tm, delete_tm, get_average_capacity,
@@ -27,6 +27,39 @@ async def read_tms(current_user: UserModel = Depends(get_current_user)):
         message="Transit mixers retrieved successfully",
         data=tms
     )
+
+@router.put("/{tm_id}/status", response_model=StandardResponse[TransitMixerModel])
+async def update_tm_status(
+    tm_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Update the status of a transit mixer.
+    
+    Path parameter:
+    - tm_id: The ID of the transit mixer to update
+
+    Returns the updated transit mixer details.
+    """
+    tm = await get_tm(tm_id, str(current_user.id))
+    if not tm:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transit mixer not found"
+        )
+    current_status = tm.status
+    if current_status == "active":
+        new_status = "inactive"
+    else:
+        new_status = "active"
+    tm.status = new_status
+    updated_tm = await update_tm(tm_id, tm, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Transit mixer status updated successfully",
+        data=updated_tm
+    )
+
 
 @router.post("/", response_model=StandardResponse[TransitMixerModel], status_code=status.HTTP_201_CREATED)
 async def create_transit_mixer(
