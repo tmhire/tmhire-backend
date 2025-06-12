@@ -35,6 +35,7 @@ class User(BaseModel):
     id: str
     name: str
     email: str
+    new_user: bool
     access_token: str
     refresh_token: str
     token_type: str
@@ -73,6 +74,7 @@ async def signup(user_data: UserCreate):
                 "id": str(user.id),
                 "name": user.name,
                 "email": user.email,
+                "new_user": user.new_user,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
@@ -112,6 +114,7 @@ async def login_user(user_data: UserLogin):
                 "id": str(user.id),
                 "name": user.name,
                 "email": user.email,
+                "new_user": user.new_user,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
