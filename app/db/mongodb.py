@@ -21,6 +21,9 @@ database = client[DB_NAME]
 users = database.users
 transit_mixers = database.transit_mixers
 schedules = database.schedules
+plants = database.plants
+schedule_calendar = database.schedule_calendar
+clients = database.clients
 
 # Helper class for converting between MongoID and string
 class PyObjectId(ObjectId):

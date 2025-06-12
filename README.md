@@ -5,8 +5,11 @@ A FastAPI backend application for concrete supply scheduling with MongoDB integr
 ## Features
 
 - User authentication with Google SSO (placeholder implementation)
+- Plant management for organizing Transit Mixers
 - Transit Mixer management (CRUD operations)
 - Schedule management with dynamic output table generation
+- Schedule calendar system for tracking TM availability and booking
+- Advanced scheduling algorithm to optimize TM utilization
 - Asynchronous MongoDB operations using Motor
 
 ## Setup
@@ -54,6 +57,15 @@ Once the server is running, you can access the API documentation at:
 - `POST /auth/google`: Google SSO login (placeholder)
 - `POST /auth/token`: OAuth2 token login (for testing)
 
+### Plants
+
+- `GET /plants`: Get all plants
+- `POST /plants`: Create a new plant
+- `GET /plants/{id}`: Get a specific plant
+- `PUT /plants/{id}`: Update a plant
+- `DELETE /plants/{id}`: Delete a plant
+- `GET /plants/{id}/tms`: Get all transit mixers for a specific plant
+
 ### Transit Mixers
 
 - `GET /tms`: Get all transit mixers
@@ -70,4 +82,10 @@ Once the server is running, you can access the API documentation at:
 - `GET /schedules/{id}`: Get a specific schedule
 - `PUT /schedules/{id}`: Update a schedule
 - `DELETE /schedules/{id}`: Delete a schedule
-- `POST /schedules/{id}/generate`: Generate output table for a schedule 
+- `POST /schedules/calculate-tm`: Calculate required TM count for a schedule
+- `POST /schedules/{id}/generate-schedule`: Generate output table for a schedule
+
+### Schedule Calendar
+
+- `POST /calendar`: Get calendar data for a date range
+- `GET /calendar/tm/{tm_id}`: Get availability slots for a specific TM on a specific date 
