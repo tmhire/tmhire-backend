@@ -1,5 +1,6 @@
+from bson import ObjectId
 from app.db.mongodb import users
-from app.models.user import UserModel, UserCreate
+from app.models.user import UserModel, UserCreate, UserUpdate
 from datetime import datetime, timedelta
 from typing import Optional
 import os
@@ -29,6 +30,13 @@ async def get_user_by_email(email: str) -> Optional[UserModel]:
         return UserModel(**user)
     return None
 
+async def get_user(id: str) -> Optional[UserModel]:
+    """Get a user by email"""
+    user = await users.find_one({"_id": ObjectId(id)})
+    if user:
+        return UserModel(**user)
+    return None
+
 async def create_user(user: UserCreate) -> UserModel:
     """Create a new user"""
     user_data = user.model_dump()
@@ -43,13 +51,36 @@ async def create_user(user: UserCreate) -> UserModel:
             raise HTTPException(status_code=400, detail="User already exists")
         return UserModel(**existing_user)
     
-    if user_data["password"]:
+    if "password" in user_data and user_data["password"]:
         user_data["password"] = hash_password(user_data["password"])
     
     # Insert new user
     result = await users.insert_one(user_data)
     new_user = await users.find_one({"_id": result.inserted_id})
     return UserModel(**new_user)
+
+async def update_user_data(user_id: str, user: UserUpdate):
+    """Update a user"""
+    user_data = {k: v for k, v in user.model_dump().items() if v is not None}
+    
+    if "password" in user_data and user_data["password"]:
+        user_data["password"] = hash_password(user_data["password"])
+
+    isNewUser = True
+    if all(
+        key in user_data and user_data[key] is not None
+        for key in ["contact", "company", "city"]
+    ):
+        isNewUser = False
+    user_data["new_user"] = isNewUser
+
+    #Update user
+    await users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": user_data}
+    )
+    
+    return await get_user(user_id)
 
 def hash_password(password: str):
     return pwd_context.hash(password)

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
-from app.models.user import UserLogin, UserModel, UserCreate
-from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_user_by_email, refreshing_access_token, validate_google_token, verify_password
+from fastapi import APIRouter, Depends, HTTPException, status
+from app.models.user import UserLogin, UserModel, UserCreate, UserUpdate
+from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, refreshing_access_token, update_user_data, validate_google_token, verify_password
 from datetime import timedelta
 from typing import Dict
 from pydantic import BaseModel
@@ -212,3 +212,19 @@ async def refresh_access_token(request: RefreshTokenRequest):
             detail=str(e) or "Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+@router.put("/update", response_model=StandardResponse[UserModel])
+async def update_user(user_data: UserUpdate, current_user: UserModel = Depends(get_current_user)):
+    try:
+        user = await update_user_data(current_user.id, user_data)
+        return StandardResponse(
+            success=True,
+            message="User updated successfully",
+            data=user
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or "Failed to update user",
+        )
+

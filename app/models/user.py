@@ -9,6 +9,10 @@ class UserModel(BaseModel):
     email: EmailStr
     password: Optional[str] = None
     name: str
+    new_user: bool = Field(default=True, description="Indicates if the user is new")
+    contact: Optional[int] = Field(default=None, description="Phone number of the user")
+    company: Optional[str] = Field(default=None, description="Company that the user works for")
+    city: Optional[str] = Field(default=None, description="Location of the user")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -19,6 +23,10 @@ class UserModel(BaseModel):
             "example": {
                 "email": "user@example.com",
                 "name": "John Doe",
+                "new_user": False,
+                "contact": 1234567890,
+                "company": "Main Concrete Firm",
+                "city": "Coimbatore",
                 "created_at": datetime.utcnow()
             }
         }
@@ -28,12 +36,20 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: Optional[str] = None
     name: str
+    new_user: bool = Field(default=True, description="Indicates if the user is new")
+    contact: Optional[int] = Field(default=None, description="Phone number of the user")
+    company: Optional[str] = Field(default=None, description="Company that the user works for")
+    city: Optional[str] = Field(default=None, description="Location of the user")
     
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "email": "user@example.com",
-                "name": "John Doe"
+                "name": "John Doe",
+                "new_user": False,
+                "contact": 1234567890,
+                "company": "Main Concrete Firm",
+                "city": "Coimbatore"
             }
         }
     ) 
@@ -41,3 +57,12 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    password: Optional[str] = None
+    contact: Optional[int] = None
+    company: Optional[str] = None
+    city: Optional[str] = None
+    
+

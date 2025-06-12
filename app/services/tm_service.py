@@ -37,12 +37,12 @@ async def update_tm(id: str, tm: TransitMixerUpdate, user_id: str) -> Optional[T
     """Update a transit mixer"""
     tm_data = {k: v for k, v in tm.model_dump().items() if v is not None}
     
+    if not tm_data:
+        return await get_tm(id, user_id)
+    
     # Convert plant_id to ObjectId if it exists
     if "plant_id" in tm_data and tm_data["plant_id"]:
         tm_data["plant_id"] = ObjectId(tm_data["plant_id"])
-    
-    if not tm_data:
-        return await get_tm(id, user_id)
     
     await transit_mixers.update_one(
         {"_id": ObjectId(id), "user_id": ObjectId(user_id)},
