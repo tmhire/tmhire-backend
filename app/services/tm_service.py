@@ -94,9 +94,8 @@ async def get_available_tms(date_val: Any, user_id: str) -> List[TransitMixerMod
     tms = await get_all_tms(user_id)
     available_tms = []
     
-    for i, tm in enumerate(tms):
+    for tm in tms:
         try:
-            tms[i]["status"] = "inactive"
             # Check availability for this TM
             availability = await get_tm_availability(date_obj, str(tm.id), user_id)
             
@@ -108,7 +107,6 @@ async def get_available_tms(date_val: Any, user_id: str) -> List[TransitMixerMod
                     break
             
             if tm_is_available:
-                tms[i]["status"] = "active"
                 available_tms.append(tm)
         except Exception as e:
             import logging
@@ -116,7 +114,7 @@ async def get_available_tms(date_val: Any, user_id: str) -> List[TransitMixerMod
             # Continue with the next TM if there's an error
             continue
     
-    return tms
+    return available_tms
 
 async def get_tm_availability_slots(tm_id: str, date_val: date, user_id: str) -> Dict[str, Any]:
     """
