@@ -77,3 +77,7 @@ class GanttMixer(BaseModel):
 class GanttResponse(BaseModel):
     """Response model for Gantt chart data"""
     mixers: List[GanttMixer] 
+
+class GanttRequest(BaseModel):
+    """Body of the schedule_calendar/gantt endpoint"""
+    query_date: date

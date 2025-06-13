@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from datetime import date
 from app.models.user import UserModel
-from app.models.schedule_calendar import DailySchedule, ScheduleCalendarQuery, GanttResponse, GanttMixer
+from app.models.schedule_calendar import DailySchedule, GanttRequest, ScheduleCalendarQuery, GanttResponse, GanttMixer
 from app.services.schedule_calendar_service import (
     get_calendar_for_date_range,
     get_tm_availability,
@@ -15,7 +15,7 @@ router = APIRouter(tags=["Schedule Calendar"])
 
 @router.post("/gantt", response_model=StandardResponse[GanttResponse])
 async def get_gantt_calendar(
-    query: ScheduleCalendarQuery,
+    query: GanttRequest,
     current_user: UserModel = Depends(get_current_user)
 ):
     """
@@ -40,7 +40,7 @@ async def get_gantt_calendar(
         - client: Client name
         - type: Task type (production, cleaning, setup, quality, maintenance)
     """
-    gantt_data = await get_gantt_data(query, str(current_user.id))
+    gantt_data = await get_gantt_data(query.query_date, str(current_user.id))
     return StandardResponse(
         success=True,
         message="Gantt calendar data retrieved successfully",

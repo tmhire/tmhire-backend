@@ -5,6 +5,8 @@ from datetime import datetime, date, time, timedelta
 from bson import ObjectId
 from typing import List, Dict, Optional, Any
 
+from app.services.plant_service import get_plant
+
 # Constants for calendar setup
 CALENDAR_START_HOUR = 8  # 8AM
 CALENDAR_END_HOUR = 20   # 8PM
@@ -620,11 +622,11 @@ async def debug_schedule(schedule_id: str):
         print(f"Schedule {schedule_id} not found")
 
 async def get_gantt_data(
-    query: ScheduleCalendarQuery,
+    query_date: date,
     user_id: str
 ) -> List[GanttMixer]:
     """Get calendar data in Gantt chart format"""
-    print(f"Getting Gantt data for date range: {query.start_date} to {query.end_date}")
+    print(f"Getting Gantt data for date: {query_date}")
     
     # Get all TMs first
     tm_map = {}
@@ -632,40 +634,49 @@ async def get_gantt_data(
     async for tm in transit_mixers.find({"user_id": ObjectId(user_id)}):
         tm_count += 1
         tm_id = str(tm["_id"])
+        plant = await get_plant(tm["plant_id"], user_id)
+        plant_name = getattr(plant, "name", "Unknown Plant")
         tm_map[tm_id] = GanttMixer(
             id=tm_id,
             name=tm.get("identifier", "Unknown"),
-            plant=tm.get("plant_name", "Unknown Plant"),
+            plant=plant_name,
             client=None,
             tasks=[]
         )
     print(f"Found {tm_count} TMs")
-    
-    # Convert dates to datetime for query
-    start_datetime = datetime.combine(query.start_date, time.min)
-    end_datetime = datetime.combine(query.end_date, time.max)
-    
+        
+    query_date = _get_valid_date(query_date)
+
+    # Define the start and end of the day
+    start_datetime = datetime.combine(query_date, datetime.min.time())
+    end_datetime = datetime.combine(query_date + timedelta(days=1), datetime.min.time())
+    print("dates: ", query_date, start_datetime, end_datetime)
+
     # Find all schedules in the date range
     schedule_query = {
         "user_id": ObjectId(user_id),
         "status": "generated",  # Only get generated schedules
         "$or": [
-            # Match schedules with plant_start in the date range
-            {"output_table.plant_start": {
-                "$regex": f"^{query.start_date.isoformat()}|^{query.end_date.isoformat()}"
-            }},
-            # Match schedules with return in the date range
-            {"output_table.return": {
-                "$regex": f"^{query.start_date.isoformat()}|^{query.end_date.isoformat()}"
-            }}
-        ]
+        {
+            "output_table.plant_start": {
+                "$gte": start_datetime.isoformat(),
+                "$lt": end_datetime.isoformat()
+            }
+        },
+        {
+            "output_table.return": {
+                "$gte": start_datetime.isoformat(),
+                "$lt": end_datetime.isoformat()
+            }
+        }
+    ]
     }
     
-    # Add plant or TM filter if provided
-    if query.plant_id:
-        schedule_query["plant_id"] = ObjectId(query.plant_id)
-    if query.tm_id:
-        schedule_query["output_table.tm_id"] = query.tm_id
+    # # Add plant or TM filter if provided
+    # if query.plant_id:
+    #     schedule_query["plant_id"] = ObjectId(query.plant_id)
+    # if query.tm_id:
+    #     schedule_query["output_table.tm_id"] = query.tm_id
     
     print(f"Schedule query: {schedule_query}")
     
@@ -717,7 +728,7 @@ async def get_gantt_data(
                         continue
             
             # Skip if outside our date range
-            if plant_start.date() > query.end_date or return_time.date() < query.start_date:
+            if plant_start.date() != query_date or return_time.date() != query_date:
                 print(f"Skipping trip outside date range: {plant_start.date()} to {return_time.date()}")
                 continue
             
