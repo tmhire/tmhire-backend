@@ -261,3 +261,23 @@ async def update_user(user_data: UserUpdate, current_user: UserModel = Depends(g
             detail=str(e) or "Failed to update user",
         )
 
+@router.get("/profile", response_model=StandardResponse[UserModel])
+async def get_profile(current_user: UserModel = Depends(get_current_user)):
+    """
+    Get the profile information of the currently authenticated user.
+    
+    Returns:
+    - User profile information including name, email, company, city, contact details
+    """
+    try:
+        return StandardResponse(
+            success=True,
+            message="Profile retrieved successfully",
+            data=current_user
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or "Failed to retrieve profile",
+        )
+
