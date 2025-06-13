@@ -686,7 +686,7 @@ async def get_gantt_data(
         schedule_count += 1
         print(f"\nProcessing schedule {schedule['_id']}")
         # Debug the schedule
-        await debug_schedule(str(schedule["_id"]))
+        # await debug_schedule(str(schedule["_id"]))
         
         client_name = schedule.get("client_name")
         schedule_id = str(schedule["_id"])
