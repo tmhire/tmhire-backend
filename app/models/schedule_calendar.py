@@ -60,18 +60,15 @@ class ScheduleCalendarQuery(BaseModel):
 class GanttTask(BaseModel):
     """Represents a task in the Gantt chart"""
     id: str
-    start: int  # Hour of the day (0-23)
-    duration: int  # Duration in hours
-    color: str = "bg-orange-500"  # Default color
+    start: str # Start time in IST format
+    end: str  # End time in IST format
     client: Optional[str] = None
-    type: str = "production"  # production, cleaning, setup, quality, maintenance
 
 class GanttMixer(BaseModel):
     """Represents a mixer in the Gantt chart"""
     id: str
     name: str
     plant: str
-    client: Optional[str] = None
     tasks: List[GanttTask] = Field(default_factory=list)
 
 class GanttResponse(BaseModel):

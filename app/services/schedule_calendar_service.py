@@ -1,16 +1,16 @@
 from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, PyObjectId
 from app.models.schedule_calendar import DailySchedule, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask
 from app.models.schedule import ScheduleModel
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, time, timedelta, timezone
 from bson import ObjectId
 from typing import List, Dict, Optional, Any
-
 from app.services.plant_service import get_plant
 
 # Constants for calendar setup
 CALENDAR_START_HOUR = 8  # 8AM
 CALENDAR_END_HOUR = 20   # 8PM
 SLOT_DURATION_MINUTES = 30
+IST = timezone(timedelta(hours=5, minutes=30))
 
 def _get_valid_date(date: date) -> date:
     # If date is a string, parse it
@@ -621,6 +621,27 @@ async def debug_schedule(schedule_id: str):
     else:
         print(f"Schedule {schedule_id} not found")
 
+def _parse_datetime_with_timezone(dt_str: str) -> datetime:
+    """
+    Parses a datetime string and assigns timezone if missing.
+    Assumes naive datetimes are in UTC.
+    """
+    try:
+        dt = datetime.fromisoformat(dt_str)
+    except ValueError:
+        try:
+            dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+            dt = dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            print(f"❌ Failed to parse datetime string: {dt_str}")
+            return None
+
+    # If datetime is naive (no tzinfo), assume it's UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    return dt
+
 async def get_gantt_data(
     query_date: date,
     user_id: str
@@ -699,57 +720,39 @@ async def get_gantt_data(
                 continue
                 
             # Get start and end times
-            plant_start = trip.get("plant_start")
-            return_time = trip.get("return")
+            plant_start = _parse_datetime_with_timezone(trip.get("plant_start"))
+            return_time = _parse_datetime_with_timezone(trip.get("return"))
+
+            if not plant_start or not return_time:
+                continue
+
+            # Convert both to IST
+            plant_start_ist = plant_start.astimezone(IST)
+            return_time_ist = return_time.astimezone(IST)
             
             print(f"Trip times - plant_start: {plant_start}, return: {return_time}")
-            
-            # Convert to datetime if needed
-            if isinstance(plant_start, str):
-                try:
-                    plant_start = datetime.fromisoformat(plant_start)
-                except ValueError:
-                    try:
-                        # Try parsing with different format
-                        plant_start = datetime.strptime(plant_start, "%Y-%m-%dT%H:%M:%S.%fZ")
-                    except ValueError:
-                        print(f"Could not parse plant_start: {plant_start}")
-                        continue
-                    
-            if isinstance(return_time, str):
-                try:
-                    return_time = datetime.fromisoformat(return_time)
-                except ValueError:
-                    try:
-                        # Try parsing with different format
-                        return_time = datetime.strptime(return_time, "%Y-%m-%dT%H:%M:%S.%fZ")
-                    except ValueError:
-                        print(f"Could not parse return_time: {return_time}")
-                        continue
             
             # Skip if outside our date range
             if plant_start.date() != query_date or return_time.date() != query_date:
                 print(f"Skipping trip outside date range: {plant_start.date()} to {return_time.date()}")
                 continue
-            
-            # Calculate duration in hours
-            duration = (return_time - plant_start).total_seconds() / 3600
+
+            # Format time to HH:MM
+            start_str = plant_start_ist.strftime("%H:%M")
+            return_str = return_time_ist.strftime("%H:%M")
             
             # Create task
             task = GanttTask(
                 id=f"task-{schedule_id}-{tm_id}",
-                start=plant_start.hour,
-                duration=int(round(duration)),  # Convert to integer
-                color="bg-orange-500",  # Default color
+                start=start_str,
+                end=return_str,
                 client=client_name,
-                type="production"  # Default type
             )
             
             # Add task to mixer
             tm_map[tm_id].tasks.append(task)
-            tm_map[tm_id].client = client_name
             task_count += 1
-            print(f"Added task for TM {tm_id} at hour {plant_start.hour} with duration {duration}")
+            print(f"Added task for TM {tm_id} at start time {start_str} and end time {return_str}")
     
     print(f"Processed {schedule_count} schedules and created {task_count} tasks")
     
