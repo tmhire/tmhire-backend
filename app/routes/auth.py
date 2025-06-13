@@ -35,10 +35,10 @@ class TokenWithNewUser(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
-    new_user: str
-    company: str
-    city: str
-    contact: int
+    new_user: bool
+    company: str | None
+    city: str | None
+    contact: int | None
     
     class Config:
         schema_extra = {
@@ -53,9 +53,9 @@ class User(BaseModel):
     name: str
     email: str
     new_user: bool
-    company: str
-    city: str
-    contact: int
+    company: str | None
+    city: str | None
+    contact: int | None
     access_token: str
     refresh_token: str
     token_type: str
@@ -210,7 +210,7 @@ async def login_google(token_data: GoogleToken):
             "refresh_token": refresh_token,
             "token_type": "bearer"
         }
-        
+
         return StandardResponse(
             success=True,
             message="Authentication successful",
