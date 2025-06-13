@@ -1,16 +1,51 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from datetime import date
 from app.models.user import UserModel
-from app.models.schedule_calendar import DailySchedule, ScheduleCalendarQuery
+from app.models.schedule_calendar import DailySchedule, ScheduleCalendarQuery, GanttResponse, GanttMixer
 from app.services.schedule_calendar_service import (
     get_calendar_for_date_range,
-    get_tm_availability
+    get_tm_availability,
+    get_gantt_data
 )
 from app.services.auth_service import get_current_user
 from typing import List, Dict, Any
 from app.schemas.response import StandardResponse
 
 router = APIRouter(tags=["Schedule Calendar"])
+
+@router.post("/gantt", response_model=StandardResponse[GanttResponse])
+async def get_gantt_calendar(
+    query: ScheduleCalendarQuery,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Get calendar data in Gantt chart format.
+    
+    Request body:
+    - start_date: Beginning date for the calendar range (required)
+    - end_date: End date for the calendar range (required)
+    - plant_id: Optional filter for a specific plant
+    - tm_id: Optional filter for a specific transit mixer
+    
+    Returns a list of mixers with their tasks:
+    - id: Mixer ID
+    - name: Mixer name
+    - plant: Plant name
+    - client: Current client (if any)
+    - tasks: List of tasks for this mixer
+        - id: Task ID
+        - start: Start hour (0-23)
+        - duration: Duration in hours
+        - color: Task color
+        - client: Client name
+        - type: Task type (production, cleaning, setup, quality, maintenance)
+    """
+    gantt_data = await get_gantt_data(query, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Gantt calendar data retrieved successfully",
+        data=GanttResponse(mixers=gantt_data)
+    )
 
 @router.post("/", response_model=StandardResponse[List[DailySchedule]])
 async def get_calendar(
@@ -23,18 +58,13 @@ async def get_calendar(
     Request body:
     - start_date: Beginning date for the calendar range (required)
     - end_date: End date for the calendar range (required)
+    - plant_id: Optional filter for a specific plant
     - tm_id: Optional filter for a specific transit mixer
     
     Returns a list of daily schedules containing:
     - date: The calendar date
-    - booked_tms: List of transit mixers that have schedules on this date
-    - booked_count: Number of booked transit mixers
-    - total_count: Total number of transit mixers available
-    - schedules: List of schedule summaries for this date
-    
-    This endpoint is used to populate calendar views showing daily TM availability.
+    - time_slots: List of time slots with TM availability
     """
-    print(f"Calendar query: start_date={query.start_date}, end_date={query.end_date}")
     calendar_data = await get_calendar_for_date_range(query, str(current_user.id))
     return StandardResponse(
         success=True,
@@ -62,9 +92,6 @@ async def get_tm_availability_slots(
     - end_time: End time of the slot
     - status: 'available' or 'booked'
     - schedule_id: ID of the booking schedule (if booked)
-    
-    This endpoint is used to determine when a specific transit mixer is free or busy
-    on a given date, to assist with scheduling decisions.
     """
     availability_data = await get_tm_availability(date_val, tm_id, str(current_user.id))
     return StandardResponse(

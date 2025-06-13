@@ -36,41 +36,6 @@ class DailySchedule(BaseModel):
             PyObjectId: str,
             date: lambda d: d.isoformat(),
             datetime: lambda d: d.isoformat(),
-        },
-        json_schema_extra={
-            "example": {
-                "user_id": "60d5ec9af682fcd81a060e72",
-                "date": "2023-06-30T00:00:00",
-                "time_slots": [
-                    {
-                        "start_time": "2023-06-30T08:00:00",
-                        "end_time": "2023-06-30T08:30:00",
-                        "tm_availability": [
-                            {
-                                "tm_id": "60d5ec9af682fcd81a060e73",
-                                "tm_identifier": "TM-A",
-                                "plant_id": "60d5ec9af682fcd81a060e74",
-                                "plant_name": "Main Plant",
-                                "status": "available",
-                                "schedule_id": None
-                            },
-                            {
-                                "tm_id": "60d5ec9af682fcd81a060e75",
-                                "tm_identifier": "TM-B",
-                                "plant_id": "60d5ec9af682fcd81a060e74",
-                                "plant_name": "Main Plant",
-                                "status": "booked",
-                                "schedule_id": "60d5ec9af682fcd81a060e76"
-                            }
-                        ]
-                    },
-                    {
-                        "start_time": "2023-06-30T08:30:00",
-                        "end_time": "2023-06-30T09:00:00",
-                        "tm_availability": []
-                    }
-                ]
-            }
         }
     )
 
@@ -90,4 +55,25 @@ class ScheduleCalendarQuery(BaseModel):
                 "tm_id": "60d5ec9af682fcd81a060e73"
             }
         }
-    ) 
+    )
+
+class GanttTask(BaseModel):
+    """Represents a task in the Gantt chart"""
+    id: str
+    start: int  # Hour of the day (0-23)
+    duration: int  # Duration in hours
+    color: str = "bg-orange-500"  # Default color
+    client: Optional[str] = None
+    type: str = "production"  # production, cleaning, setup, quality, maintenance
+
+class GanttMixer(BaseModel):
+    """Represents a mixer in the Gantt chart"""
+    id: str
+    name: str
+    plant: str
+    client: Optional[str] = None
+    tasks: List[GanttTask] = Field(default_factory=list)
+
+class GanttResponse(BaseModel):
+    """Response model for Gantt chart data"""
+    mixers: List[GanttMixer] 

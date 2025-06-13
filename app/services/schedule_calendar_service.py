@@ -1,5 +1,5 @@
 from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, PyObjectId
-from app.models.schedule_calendar import DailySchedule, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery
+from app.models.schedule_calendar import DailySchedule, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask
 from app.models.schedule import ScheduleModel
 from datetime import datetime, date, time, timedelta
 from bson import ObjectId
@@ -601,3 +601,146 @@ async def update_calendar_after_schedule(schedule: ScheduleModel) -> bool:
         )
     
     return True 
+
+async def debug_schedule(schedule_id: str):
+    """Debug function to inspect schedule data"""
+    schedule = await schedules.find_one({"_id": ObjectId(schedule_id)})
+    if schedule:
+        print("\nSchedule Debug Info:")
+        print(f"ID: {schedule['_id']}")
+        print(f"Client: {schedule.get('client_name')}")
+        print(f"Status: {schedule.get('status')}")
+        print("\nOutput Table:")
+        for trip in schedule.get("output_table", []):
+            print(f"\nTrip:")
+            print(f"TM ID: {trip.get('tm_id')}")
+            print(f"Plant Start: {trip.get('plant_start')}")
+            print(f"Return: {trip.get('return')}")
+    else:
+        print(f"Schedule {schedule_id} not found")
+
+async def get_gantt_data(
+    query: ScheduleCalendarQuery,
+    user_id: str
+) -> List[GanttMixer]:
+    """Get calendar data in Gantt chart format"""
+    print(f"Getting Gantt data for date range: {query.start_date} to {query.end_date}")
+    
+    # Get all TMs first
+    tm_map = {}
+    tm_count = 0
+    async for tm in transit_mixers.find({"user_id": ObjectId(user_id)}):
+        tm_count += 1
+        tm_id = str(tm["_id"])
+        tm_map[tm_id] = GanttMixer(
+            id=tm_id,
+            name=tm.get("identifier", "Unknown"),
+            plant=tm.get("plant_name", "Unknown Plant"),
+            client=None,
+            tasks=[]
+        )
+    print(f"Found {tm_count} TMs")
+    
+    # Convert dates to datetime for query
+    start_datetime = datetime.combine(query.start_date, time.min)
+    end_datetime = datetime.combine(query.end_date, time.max)
+    
+    # Find all schedules in the date range
+    schedule_query = {
+        "user_id": ObjectId(user_id),
+        "status": "generated",  # Only get generated schedules
+        "$or": [
+            # Match schedules with plant_start in the date range
+            {"output_table.plant_start": {
+                "$regex": f"^{query.start_date.isoformat()}|^{query.end_date.isoformat()}"
+            }},
+            # Match schedules with return in the date range
+            {"output_table.return": {
+                "$regex": f"^{query.start_date.isoformat()}|^{query.end_date.isoformat()}"
+            }}
+        ]
+    }
+    
+    # Add plant or TM filter if provided
+    if query.plant_id:
+        schedule_query["plant_id"] = ObjectId(query.plant_id)
+    if query.tm_id:
+        schedule_query["output_table.tm_id"] = query.tm_id
+    
+    print(f"Schedule query: {schedule_query}")
+    
+    schedule_count = 0
+    task_count = 0
+    async for schedule in schedules.find(schedule_query):
+        schedule_count += 1
+        print(f"\nProcessing schedule {schedule['_id']}")
+        # Debug the schedule
+        await debug_schedule(str(schedule["_id"]))
+        
+        client_name = schedule.get("client_name")
+        schedule_id = str(schedule["_id"])
+        
+        # Process each trip in the schedule
+        for trip in schedule.get("output_table", []):
+            tm_id = trip.get("tm_id")
+            if not tm_id or tm_id not in tm_map:
+                print(f"Skipping trip for unknown TM: {tm_id}")
+                continue
+                
+            # Get start and end times
+            plant_start = trip.get("plant_start")
+            return_time = trip.get("return")
+            
+            print(f"Trip times - plant_start: {plant_start}, return: {return_time}")
+            
+            # Convert to datetime if needed
+            if isinstance(plant_start, str):
+                try:
+                    plant_start = datetime.fromisoformat(plant_start)
+                except ValueError:
+                    try:
+                        # Try parsing with different format
+                        plant_start = datetime.strptime(plant_start, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    except ValueError:
+                        print(f"Could not parse plant_start: {plant_start}")
+                        continue
+                    
+            if isinstance(return_time, str):
+                try:
+                    return_time = datetime.fromisoformat(return_time)
+                except ValueError:
+                    try:
+                        # Try parsing with different format
+                        return_time = datetime.strptime(return_time, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    except ValueError:
+                        print(f"Could not parse return_time: {return_time}")
+                        continue
+            
+            # Skip if outside our date range
+            if plant_start.date() > query.end_date or return_time.date() < query.start_date:
+                print(f"Skipping trip outside date range: {plant_start.date()} to {return_time.date()}")
+                continue
+            
+            # Calculate duration in hours
+            duration = (return_time - plant_start).total_seconds() / 3600
+            
+            # Create task
+            task = GanttTask(
+                id=f"task-{schedule_id}-{tm_id}",
+                start=plant_start.hour,
+                duration=int(round(duration)),  # Convert to integer
+                color="bg-orange-500",  # Default color
+                client=client_name,
+                type="production"  # Default type
+            )
+            
+            # Add task to mixer
+            tm_map[tm_id].tasks.append(task)
+            tm_map[tm_id].client = client_name
+            task_count += 1
+            print(f"Added task for TM {tm_id} at hour {plant_start.hour} with duration {duration}")
+    
+    print(f"Processed {schedule_count} schedules and created {task_count} tasks")
+    
+    # Convert map to list
+    return list(tm_map.values()) 
