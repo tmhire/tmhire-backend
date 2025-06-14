@@ -1,6 +1,6 @@
 from app.db.mongodb import schedules, PyObjectId, transit_mixers, clients
 from app.models.schedule import ScheduleModel, ScheduleCreate, ScheduleUpdate, Trip
-from app.services.tm_service import get_average_capacity, get_tm
+from app.services.tm_service import get_average_capacity, get_tm, get_available_tms
 from app.services.client_service import get_client
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
 from datetime import datetime, timedelta, date, time
@@ -278,13 +278,27 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
 
     result = await schedules.insert_one(schedule_data)
     
+    # Get available TMs for the schedule date
+    available_tms = await get_available_tms(schedule_date, user_id)
+    
+    # Format available TMs for response
+    available_tm_list = []
+    for tm in available_tms:
+        available_tm_list.append({
+            "id": str(tm.id),
+            "identifier": tm.identifier,
+            "capacity": tm.capacity,
+            "plant_id": str(tm.plant_id) if tm.plant_id else None
+        })
+    
     return {
         "schedule_id": str(result.inserted_id),
         "tm_count": tm_count,
         "total_trips": total_trips,
         "trips_per_tm": base_trips_per_tm,
         "remaining_trips": remaining_trips,
-        "cycle_time": cycle_time
+        "cycle_time": cycle_time,
+        "available_tms": available_tm_list
     }
 
 def _ensure_dateobj(date: datetime | str) -> date:
