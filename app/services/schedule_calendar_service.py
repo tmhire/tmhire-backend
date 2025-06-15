@@ -668,9 +668,9 @@ async def get_gantt_data(
         
     query_date = _get_valid_date(query_date)
 
-    # Define the start and end of the day in IST
-    start_datetime = datetime.combine(query_date, time.min).replace(tzinfo=IST)
-    end_datetime = datetime.combine(query_date + timedelta(days=1), time.min).replace(tzinfo=IST)
+    # Define the start and end of the day in UTC
+    start_datetime = datetime.combine(query_date, time.min).replace(tzinfo=timezone.utc)
+    end_datetime = datetime.combine(query_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
     print("dates: ", query_date, start_datetime, end_datetime)
 
     # Find all schedules in the date range
@@ -718,20 +718,25 @@ async def get_gantt_data(
             if not plant_start or not return_time:
                 continue
 
-            # Convert both to IST
-            plant_start_ist = plant_start.astimezone(IST)
-            return_time_ist = return_time.astimezone(IST)
+            print(f"Original times - plant_start: {plant_start}, return: {return_time}")
+            print(f"Original timezone - plant_start: {plant_start.tzinfo}, return: {return_time.tzinfo}")
+
+            # Keep original time without timezone conversion
+            plant_start_ist = plant_start
+            return_time_ist = return_time
             
-            print(f"Trip times - plant_start: {plant_start_ist}, return: {return_time_ist}")
+            print(f"Using original times - plant_start: {plant_start_ist}, return: {return_time_ist}")
             
             # Skip if outside our date range
             if plant_start_ist.date() != query_date or return_time_ist.date() != query_date:
                 print(f"Skipping trip outside date range: {plant_start_ist.date()} to {return_time_ist.date()}")
                 continue
 
-            # Format time to HH:MM in IST
+            # Format time to HH:MM
             start_str = plant_start_ist.strftime("%H:%M")
             return_str = return_time_ist.strftime("%H:%M")
+            
+            print(f"Final formatted times - start: {start_str}, return: {return_str}")
             
             # Create task with local time strings
             task = GanttTask(

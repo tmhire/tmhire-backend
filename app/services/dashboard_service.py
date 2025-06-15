@@ -11,18 +11,18 @@ async def get_dashboard_stats(user_id: str) -> Dict[str, Any]:
     
     # Get counts
     plant_count = await plants.count_documents({"user_id": user_id_obj})
-    tm_count = await transit_mixers.count_documents({"user_id": user_id_obj})
+    tm_count = await transit_mixers.count_documents({"user_id": user_id_obj, "status": "active"})
     client_count = await clients.count_documents({"user_id": user_id_obj})
-    pump_count = await pumps.count_documents({"user_id": user_id_obj})
+    pump_count = await pumps.count_documents({"user_id": user_id_obj, "status": "active"})
     
-    # Get orders for today
+    # Get orders scheduled for today
     today = datetime.now().date()
     today_start = datetime.combine(today, datetime.min.time())
     today_end = datetime.combine(today, datetime.max.time())
     
     today_orders = await schedules.count_documents({
         "user_id": user_id_obj,
-        "created_at": {
+        "schedule_date": {
             "$gte": today_start,
             "$lte": today_end
         }
