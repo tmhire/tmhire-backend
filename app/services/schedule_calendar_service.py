@@ -668,9 +668,9 @@ async def get_gantt_data(
         
     query_date = _get_valid_date(query_date)
 
-    # Define the start and end of the day
-    start_datetime = datetime.combine(query_date, datetime.min.time())
-    end_datetime = datetime.combine(query_date + timedelta(days=1), datetime.min.time())
+    # Define the start and end of the day in IST
+    start_datetime = datetime.combine(query_date, time.min).replace(tzinfo=IST)
+    end_datetime = datetime.combine(query_date + timedelta(days=1), time.min).replace(tzinfo=IST)
     print("dates: ", query_date, start_datetime, end_datetime)
 
     # Find all schedules in the date range
@@ -693,12 +693,6 @@ async def get_gantt_data(
     ]
     }
     
-    # # Add plant or TM filter if provided
-    # if query.plant_id:
-    #     schedule_query["plant_id"] = ObjectId(query.plant_id)
-    # if query.tm_id:
-    #     schedule_query["output_table.tm_id"] = query.tm_id
-    
     print(f"Schedule query: {schedule_query}")
     
     schedule_count = 0
@@ -706,8 +700,6 @@ async def get_gantt_data(
     async for schedule in schedules.find(schedule_query):
         schedule_count += 1
         print(f"\nProcessing schedule {schedule['_id']}")
-        # Debug the schedule
-        # await debug_schedule(str(schedule["_id"]))
         
         client_name = schedule.get("client_name")
         schedule_id = str(schedule["_id"])
@@ -730,18 +722,18 @@ async def get_gantt_data(
             plant_start_ist = plant_start.astimezone(IST)
             return_time_ist = return_time.astimezone(IST)
             
-            print(f"Trip times - plant_start: {plant_start}, return: {return_time}")
+            print(f"Trip times - plant_start: {plant_start_ist}, return: {return_time_ist}")
             
             # Skip if outside our date range
-            if plant_start.date() != query_date or return_time.date() != query_date:
-                print(f"Skipping trip outside date range: {plant_start.date()} to {return_time.date()}")
+            if plant_start_ist.date() != query_date or return_time_ist.date() != query_date:
+                print(f"Skipping trip outside date range: {plant_start_ist.date()} to {return_time_ist.date()}")
                 continue
 
-            # Format time to HH:MM
+            # Format time to HH:MM in IST
             start_str = plant_start_ist.strftime("%H:%M")
             return_str = return_time_ist.strftime("%H:%M")
             
-            # Create task
+            # Create task with local time strings
             task = GanttTask(
                 id=f"task-{schedule_id}-{tm_id}",
                 start=start_str,
