@@ -1,6 +1,6 @@
 from app.db.mongodb import schedules, PyObjectId, transit_mixers, clients
 from app.models.schedule import ScheduleModel, ScheduleCreate, ScheduleUpdate, Trip
-from app.services.tm_service import get_average_capacity, get_tm, get_available_tms
+from app.services.tm_service import get_all_tms, get_average_capacity, get_tm, get_available_tms
 from app.services.client_service import get_client
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
 from datetime import datetime, timedelta, date, time
@@ -156,6 +156,19 @@ def get_unloading_time(capacity: float) -> int:
         rounded_capacity = 10
     return UNLOADING_TIME_LOOKUP[rounded_capacity]
 
+async def get_tm_ids_by_schedule_date(target_date: date, user_id: str) -> set[str]:
+    tm_ids = set()
+    async for schedule in schedules.find({
+        "input_params.schedule_date": target_date.isoformat(),
+        "user_id": ObjectId(user_id)
+    }):
+        for trip in schedule.get("output_table", []):
+            tm_id = trip.get("tm_id")
+            if tm_id:
+                tm_ids.add(tm_id)
+
+    return tm_ids
+
 async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
     """Calculate the required Transit Mixer count and create a draft schedule."""
     avg_capacity = await get_average_capacity(user_id)
@@ -278,17 +291,20 @@ async def calculate_tm_count(schedule: ScheduleCreate, user_id: str) -> Dict:
 
     result = await schedules.insert_one(schedule_data)
     
-    # Get available TMs for the schedule date
-    available_tms = await get_available_tms(schedule_date, user_id)
-    
-    # Format available TMs for response
+    tms = await get_all_tms(user_id)
+    available_tm = await get_tm_ids_by_schedule_date(schedule_date, user_id)
     available_tm_list = []
-    for tm in available_tms:
+
+    for tm in tms:
+        availability = True
+        if str(tm.id) in available_tm:
+            availability = False
         available_tm_list.append({
             "id": str(tm.id),
             "identifier": tm.identifier,
             "capacity": tm.capacity,
-            "plant_id": str(tm.plant_id) if tm.plant_id else None
+            "plant_id": str(tm.plant_id) if tm.plant_id else None,
+            "availability": availability
         })
     
     return {
