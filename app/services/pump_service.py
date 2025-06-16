@@ -8,6 +8,9 @@ async def get_all_pumps(user_id: str) -> List[PumpModel]:
     """Get all pumps for a user"""
     result = []
     async for pump in pumps.find({"user_id": ObjectId(user_id)}):
+        # Convert empty string or None plant_id to None
+        if "plant_id" in pump and (not pump["plant_id"] or pump["plant_id"] == ""):
+            pump["plant_id"] = None
         result.append(PumpModel(**pump))
     return result
 
