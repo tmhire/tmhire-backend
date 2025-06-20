@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any, Union
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
+from enum import Enum
 
 class InputParams(BaseModel):
     quantity: float
@@ -50,17 +51,26 @@ class Trip(BaseModel):
         }
     )
 
+class PumpType(str, Enum):
+    LINE = "line"
+    BOOM = "boom"
+
+
 class ScheduleModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: PyObjectId
     client_id: Optional[PyObjectId] = None
     client_name: str
+    pump: Optional[PyObjectId] = None
+    pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_location: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_updated: datetime = Field(default_factory=datetime.utcnow)
     input_params: InputParams
     output_table: Optional[List[Trip]] = Field(default_factory=list)
     tm_count: Optional[int] = None
+    concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
     status: str = "draft"  # draft, generated, finalized, completed, cancelled
     
@@ -94,10 +104,28 @@ class ScheduleModel(BaseModel):
         }
     )
 
+class AvailableTM(BaseModel):
+    id: str
+    identifier: str
+    capacity: float
+    plant_id: str
+    availability: bool
+
+class GetScheduleResponse(ScheduleModel):
+    available_tms: Optional[List[AvailableTM]] = Field(default_factory=list)
+    cycle_time: Optional[float] = None  # Total cycle time for the schedule in hours
+    total_trips: Optional[int] = None  # Total number of trips calculated for this schedule
+    trips_per_tm: Optional[int] = None  # Average number of trips per TM for this schedule
+
 class ScheduleCreate(BaseModel):
     client_id: str
     client_name: Optional[str] = None
+    pump: Optional[PyObjectId] = None
+    pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_location: Optional[str] = None
+    concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
+    pumping_time: Optional[float] = None
     input_params: InputParams
     
     model_config = ConfigDict(
@@ -118,6 +146,9 @@ class ScheduleCreate(BaseModel):
             }
         }
     )
+
+class CalculateTM(ScheduleCreate):
+    tm_id: str
 
 class ScheduleUpdate(BaseModel):
     client_id: Optional[str] = None

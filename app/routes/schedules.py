@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional, Dict, Any
 from datetime import date
-from app.models.schedule import ScheduleModel, ScheduleCreate, ScheduleUpdate
+from app.models.schedule import GetScheduleResponse, ScheduleCreate, ScheduleModel, CalculateTM, ScheduleUpdate
 from app.models.user import UserModel
 from app.services.schedule_service import (
     get_all_schedules,
     get_schedule,
     update_schedule,
     delete_schedule,
-    calculate_tm_count,
+    create_schedule_draft,
     generate_schedule,
     get_daily_schedule
 )
@@ -58,12 +58,17 @@ async def read_daily_schedule(
         data=safe_data
     )
 
-@router.get("/{schedule_id}", response_model=StandardResponse[ScheduleModel])
+@router.get("/{schedule_id}", response_model=StandardResponse[GetScheduleResponse])
 async def read_schedule(
     schedule_id: str,
     current_user: UserModel = Depends(get_current_user)
 ):
     """Get a schedule by ID"""
+    if schedule_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Schedule ID is required"
+        )
     schedule = await get_schedule(schedule_id, str(current_user.id))
     if not schedule:
         raise HTTPException(
@@ -78,6 +83,19 @@ async def read_schedule(
         success=True,
         message="Schedule retrieved successfully",
         data=safe_data
+    )
+
+@router.post("/", response_model=StandardResponse[ScheduleModel])
+async def create_schedule(
+    schedule: ScheduleCreate,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Create a new schedule"""
+    result = await create_schedule_draft(schedule, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Transit mixer count calculated successfully",
+        data=result
     )
 
 @router.put("/{schedule_id}", response_model=StandardResponse[ScheduleModel])
@@ -121,38 +139,38 @@ async def delete_existing_schedule(
         data={"schedule_id": schedule_id}
     )
 
-@router.post("/calculate-tm", response_model=StandardResponse[Dict])
-async def calculate_tm(
-    schedule: ScheduleCreate,
-    current_user: UserModel = Depends(get_current_user)
-):
-    """
-    Calculate the required Transit Mixer count and create a draft schedule.
+# @router.post("/calculate-tm", response_model=StandardResponse[Dict])
+# async def calculate_tm(
+#     schedule: CalculateTM,
+#     current_user: UserModel = Depends(get_current_user)
+# ):
+#     """
+#     Calculate the required Transit Mixer count and create a draft schedule.
     
-    Request body:
-    - client_id: ID of the client for this schedule
-    - client_name: Name of the client (optional if client_id is provided)
-    - site_location: Location of the construction site
-    - input_params: Contains scheduling parameters including:
-      - quantity: Total concrete quantity needed (in cubic meters)
-      - pumping_speed: Concrete pumping speed (cubic meters per hour)
-      - onward_time: Travel time from plant to site (minutes)
-      - return_time: Travel time from site back to plant (minutes)
-      - buffer_time: Buffer time between trips (minutes)
-      - pump_start: When pumping should start (datetime)
-      - schedule_date: Date for the schedule (date)
+#     Request body:
+#     - client_id: ID of the client for this schedule
+#     - client_name: Name of the client (optional if client_id is provided)
+#     - site_location: Location of the construction site
+#     - input_params: Contains scheduling parameters including:
+#       - quantity: Total concrete quantity needed (in cubic meters)
+#       - pumping_speed: Concrete pumping speed (cubic meters per hour)
+#       - onward_time: Travel time from plant to site (minutes)
+#       - return_time: Travel time from site back to plant (minutes)
+#       - buffer_time: Buffer time between trips (minutes)
+#       - pump_start: When pumping should start (datetime)
+#       - schedule_date: Date for the schedule (date)
     
-    Returns:
-    - schedule_id: ID of the created draft schedule
-    - tm_count: Number of transit mixers required
-    - tm_identifiers: List of transit mixer identifiers (A, B, C, ...)
-    """
-    result = await calculate_tm_count(schedule, str(current_user.id))
-    return StandardResponse(
-        success=True,
-        message="Transit mixer count calculated successfully",
-        data=result
-    )
+#     Returns:
+#     - schedule_id: ID of the created draft schedule
+#     - tm_count: Number of transit mixers required
+#     - tm_identifiers: List of transit mixer identifiers (A, B, C, ...)
+#     """
+#     result = await create_schedule_draft(schedule, str(current_user.id))
+#     return StandardResponse(
+#         success=True,
+#         message="Transit mixer count calculated successfully",
+#         data=result
+#     )
 
 @router.post("/{schedule_id}/generate-schedule", response_model=StandardResponse[ScheduleModel])
 async def generate_schedule_endpoint(
