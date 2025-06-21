@@ -9,7 +9,7 @@ class InputParams(BaseModel):
     quantity: float
     pumping_speed: float
     onward_time: int
-    pump_onward_time: int
+    pump_onward_time: int = 0
     return_time: int
     buffer_time: int
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
