@@ -150,7 +150,7 @@ async def delete_existing_schedule(
 #     Request body:
 #     - client_id: ID of the client for this schedule
 #     - client_name: Name of the client (optional if client_id is provided)
-#     - site_location: Location of the construction site
+#     - site_address: Location of the construction site
 #     - input_params: Contains scheduling parameters including:
 #       - quantity: Total concrete quantity needed (in cubic meters)
 #       - pumping_speed: Concrete pumping speed (cubic meters per hour)

@@ -63,7 +63,7 @@ class ScheduleModel(BaseModel):
     client_name: str
     pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
-    site_location: Optional[str] = None
+    site_address: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_updated: datetime = Field(default_factory=datetime.utcnow)
     input_params: InputParams
@@ -87,7 +87,7 @@ class ScheduleModel(BaseModel):
                 "user_id": "60d5ec9af682fcd81a060e72",
                 "client_id": "60d5ec9af682fcd81a060e78",
                 "client_name": "ABC Constructions",
-                "site_location": "Chennai Main Road Site",
+                "site_address": "Chennai Main Road Site",
                 "input_params": {
                     "quantity": 60,
                     "pumping_speed": 30,
@@ -122,7 +122,7 @@ class ScheduleCreate(BaseModel):
     client_name: Optional[str] = None
     pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
-    site_location: Optional[str] = None
+    site_address: Optional[str] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
@@ -133,7 +133,7 @@ class ScheduleCreate(BaseModel):
             "example": {
                 "client_id": "60d5ec9af682fcd81a060e78",
                 "client_name": "ABC Constructions",
-                "site_location": "Chennai Main Road Site",
+                "site_address": "Chennai Main Road Site",
                 "input_params": {
                     "quantity": 60,
                     "pumping_speed": 30,
@@ -153,7 +153,7 @@ class CalculateTM(ScheduleCreate):
 class ScheduleUpdate(BaseModel):
     client_id: Optional[str] = None
     client_name: Optional[str] = None
-    site_location: Optional[str] = None
+    site_address: Optional[str] = None
     input_params: Optional[InputParams] = None
     status: Optional[str] = None
     
@@ -162,7 +162,7 @@ class ScheduleUpdate(BaseModel):
             "example": {
                 "client_id": "60d5ec9af682fcd81a060e79",
                 "client_name": "XYZ Constructions",
-                "site_location": "Updated Location",
+                "site_address": "Updated Location",
                 "input_params": {
                     "quantity": 70,
                     "pumping_speed": 35,
