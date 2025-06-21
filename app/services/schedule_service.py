@@ -97,6 +97,9 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                         # If can't parse, just leave as is and let Pydantic handle the error
                         pass
 
+        # Ensure pump_onward_time is present in input_params
+        if "pump_onward_time" not in schedule["input_params"]:
+            schedule["input_params"]["pump_onward_time"] = 0
         input_params = InputParams(**schedule["input_params"])
         tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params)
         tm_suggestion.pop("tm_count", None)
