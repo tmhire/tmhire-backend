@@ -9,6 +9,7 @@ class InputParams(BaseModel):
     quantity: float
     pumping_speed: float
     onward_time: int
+    pump_onward_time: int
     return_time: int
     buffer_time: int
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
@@ -92,6 +93,7 @@ class ScheduleModel(BaseModel):
                     "quantity": 60,
                     "pumping_speed": 30,
                     "onward_time": 30,
+                    "pump_onward_time": 25,
                     "return_time": 25,
                     "buffer_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
@@ -138,6 +140,7 @@ class ScheduleCreate(BaseModel):
                     "quantity": 60,
                     "pumping_speed": 30,
                     "onward_time": 30,
+                    "pump_onward_time": 25,
                     "return_time": 25,
                     "buffer_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
@@ -167,6 +170,7 @@ class ScheduleUpdate(BaseModel):
                     "quantity": 70,
                     "pumping_speed": 35,
                     "onward_time": 30,
+                    "pump_onward_time": 25,
                     "return_time": 25,
                     "buffer_time": 5,
                     "pump_start": "2023-06-26T08:00:00",

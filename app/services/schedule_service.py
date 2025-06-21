@@ -187,6 +187,7 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams) -> D
     buffer_time = input_params.buffer_time
     quantity = input_params.quantity
     pumping_speed = input_params.pumping_speed
+    pump_onward_time = input_params.pump_onward_time
 
     # Calculate cycle time components
     unloading_time = get_unloading_time(avg_capacity)
@@ -474,7 +475,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     base_time = datetime.combine(schedule_date, pump_start_time)
     print(f"Base time set to: {base_time}")
 
-    onward_time = schedule["input_params"]["onward_time"]
+    onward_time = schedule["input_params"]["onward_time"]  # Always use TM onward_time for TM trips
     return_time = schedule["input_params"]["return_time"]
     buffer_time = schedule["input_params"]["buffer_time"]
 
