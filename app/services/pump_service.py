@@ -2,7 +2,7 @@ from app.db.mongodb import pumps, PyObjectId, schedules
 from app.models.pump import PumpModel, PumpCreate, PumpUpdate
 from bson import ObjectId
 from typing import List, Optional
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from app.models.schedule_calendar import GanttTask, GanttMixer
 from app.services.plant_service import get_plant
 
@@ -61,6 +61,13 @@ async def get_pumps_by_plant(plant_id: str, user_id: str) -> List[PumpModel]:
         result.append(PumpModel(**pump))
     return result
 
+def get_date_from_iso(iso_str):
+            if isinstance(iso_str, str):
+                    try:
+                        return datetime.fromisoformat(iso_str)
+                    except Exception:
+                        return None
+
 async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[GanttMixer]:
     """Get Gantt chart data for all pumps for a given date."""
     # Get all pumps for the user
@@ -72,8 +79,6 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
         if plant_id:
             plant = await get_plant(plant_id, user_id)
             plant_name = plant.name if plant else "Unknown Plant"
-        else:
-            plant_name = None
         pump_map[pump_id] = GanttMixer(
             id=pump_id,
             name=pump.get("identifier", "Unknown"),
@@ -101,29 +106,17 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
         trips = schedule.get("output_table", [])
         if not trips:
             continue
-        pump_starts = []
-        returns = []
-        for trip in trips:
-            ps = trip.get("pump_start")
-            if ps:
-                if isinstance(ps, str):
-                    try:
-                        ps = datetime.fromisoformat(ps)
-                    except Exception:
-                        continue
-                pump_starts.append(ps)
-            rt = trip.get("return")
-            if rt:
-                if isinstance(rt, str):
-                    try:
-                        rt = datetime.fromisoformat(rt)
-                    except Exception:
-                        continue
-                returns.append(rt)
-        if not pump_starts or not returns:
+        start_time = trips[0].get("pump_start")
+        end_time = trips[-1].get("unloading_time")
+        if not start_time or not end_time:
             continue
-        start_time = min(pump_starts)
-        end_time = max(returns)
+        start_time = get_date_from_iso(start_time)
+        end_time = get_date_from_iso(end_time)
+        if start_time == None or end_time == None:
+            continue
+        pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
+        pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
+        start_time = start_time - timedelta(minutes=pump_onward_time + pump_fixing_time)
         task = GanttTask(
             id=f"task-{schedule_id}-{pump_id}",
             start=start_time.strftime("%H:%M"),
@@ -131,6 +124,6 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
             client=client_name
         )
         pump_map[pump_id].tasks.append(task)
-
+    print(f"Pump Gantt data for {query_date} retrieved: {pump_map}")
     return list(pump_map.values())
 
