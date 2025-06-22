@@ -1,0 +1,28 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    # Runs every 10 minutes
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping FastAPI Render App with Logging and Retry
+        run: |
+          echo "Starting ping to FastAPI app on Render..."
+          for i in {1..3}; do
+            echo "Attempt $i:"
+            response=$(curl -v --silent --show-error --write-out "%{http_code}" --output /dev/null https://tmhire-backend.onrender.com/ping)
+            if [[ "$response" == "200" ]]; then
+              echo "✅ Ping successful with HTTP status $response"
+              exit 0
+            else
+              echo "⚠️ Ping failed with HTTP status $response. Retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+          echo "❌ Ping failed after 3 attempts"
+          exit 1
