@@ -10,6 +10,7 @@ class InputParams(BaseModel):
     pumping_speed: float
     onward_time: int
     pump_onward_time: int = 0
+    pump_fixing_time: int = 0  # Time taken to fix the pump at the site
     return_time: int
     buffer_time: int
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
@@ -98,6 +99,7 @@ class ScheduleModel(BaseModel):
                     "pumping_speed": 30,
                     "onward_time": 30,
                     "pump_onward_time": 25,
+                    "pump_fixing_time": 10,
                     "return_time": 25,
                     "buffer_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
@@ -163,6 +165,10 @@ class ScheduleUpdate(BaseModel):
     site_address: Optional[str] = None
     input_params: Optional[InputParams] = None
     status: Optional[str] = None
+    pump: Optional[PyObjectId] = None
+    pump_type: Optional[PumpType] = None
+    pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
+    concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     
     model_config = ConfigDict(
         json_schema_extra={
