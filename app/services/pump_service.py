@@ -4,6 +4,7 @@ from bson import ObjectId
 from typing import List, Optional
 from datetime import datetime, time
 from app.models.schedule_calendar import GanttTask, GanttMixer
+from app.services.plant_service import get_plant
 
 async def get_all_pumps(user_id: str) -> List[PumpModel]:
     """Get all pumps for a user"""
@@ -62,13 +63,19 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
     """Get Gantt chart data for all pumps for a given date."""
     # Get all pumps for the user
     pump_map = {}
-    async for pump in pumps.find({"user_id": ObjectId(user_id)}):
+    for pump in await pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None):
         pump_id = str(pump["_id"])
         plant_id = str(pump.get("plant_id", ""))
+        plant_name = None
+        if plant_id:
+            plant = await get_plant(plant_id, user_id)
+            plant_name = plant.name if plant else "Unknown Plant"
+        else:
+            plant_name = None
         pump_map[pump_id] = GanttMixer(
             id=pump_id,
             name=pump.get("identifier", "Unknown"),
-            plant=plant_id,
+            plant=plant_name,
             tasks=[]
         )
 
