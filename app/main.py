@@ -81,6 +81,9 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 # Include routers
+@app.get("/ping")
+async def ping():
+    return JSONResponse(content={"message": "pong"}, status_code=200)
 # edit
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(plants.router, prefix="/plants", tags=["Plants"])
