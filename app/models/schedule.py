@@ -32,6 +32,8 @@ class Trip(BaseModel):
     unloading_time: Union[datetime, str]
     return_: Union[datetime, str] = Field(..., alias="return")
     completed_capacity: float = 0
+    cycle_time: Optional[float] = None  # Duration of this trip in seconds
+    trip_no_for_tm: Optional[int] = None  # Nth trip for this TM in the schedule
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -47,7 +49,9 @@ class Trip(BaseModel):
                 "pump_start": "2023-06-25T09:00:00",
                 "unloading_time": "2023-06-25T09:12:00",
                 "return": "2023-06-25T09:52:00",
-                "completed_capacity": 8.0
+                "completed_capacity": 8.0,
+                "cycle_time": 4920.0,
+                "trip_no_for_tm": 1
             }
         }
     )
