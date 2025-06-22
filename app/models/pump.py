@@ -7,11 +7,12 @@ from bson import ObjectId
 class PumpModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: PyObjectId
-    plant_id: Optional[PyObjectId] = None
+    plant_id: Optional[PyObjectId | str] = None
     identifier: str
     capacity: float
     type: Literal["line", "boom"]
     status: Literal["active", "inactive"] = Field(default="active")
+    make: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(
@@ -26,6 +27,7 @@ class PumpModel(BaseModel):
                 "capacity": 50.0,
                 "type": "boom",
                 "status": "active",
+                "make": "Ashok Leyland",
                 "created_at": datetime.utcnow()
             }
         }
@@ -37,6 +39,7 @@ class PumpCreate(BaseModel):
     capacity: float
     type: Literal["line", "boom"]
     status: Literal["active", "inactive"] = Field(default="active")
+    make: str
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -45,7 +48,8 @@ class PumpCreate(BaseModel):
                 "identifier": "PUMP-1",
                 "capacity": 50.0,
                 "type": "line",
-                "status": "active"
+                "status": "active",
+                "make": "Ashok Leyland"
             }
         }
     )
@@ -56,6 +60,7 @@ class PumpUpdate(BaseModel):
     capacity: Optional[float] = None
     type: Optional[Literal["line", "boom"]] = None
     status: Optional[Literal["active", "inactive"]] = None
+    make: Optional[str] = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -64,7 +69,8 @@ class PumpUpdate(BaseModel):
                 "identifier": "PUMP-2",
                 "capacity": 60.0,
                 "type": "boom",
-                "status": "inactive"
+                "status": "inactive",
+                "make": "Ashok Leyland"
             }
         }
     )

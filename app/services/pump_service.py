@@ -26,6 +26,8 @@ async def get_pump(id: str, user_id: str) -> Optional[PumpModel]:
 async def create_pump(pump: PumpCreate, user_id: str) -> PumpModel:
     """Create a new pump"""
     pump_data = pump.model_dump()
+    if "identifier" not in pump_data or not pump_data["identifier"]:
+        raise ValueError("Pump identifier is required")
     pump_data["user_id"] = ObjectId(user_id)
     if "plant_id" in pump_data and pump_data["plant_id"]:
         pump_data["plant_id"] = ObjectId(pump_data["plant_id"])
