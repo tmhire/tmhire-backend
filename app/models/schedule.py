@@ -110,7 +110,7 @@ class AvailableTM(BaseModel):
     id: str
     identifier: str
     capacity: float
-    plant_id: str
+    plant_id: Optional[str]
     availability: bool
 
 class GetScheduleResponse(ScheduleModel):
