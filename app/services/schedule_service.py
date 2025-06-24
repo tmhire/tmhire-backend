@@ -173,8 +173,6 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
                     schedule_date = datetime.now().date()
             schedule_data["input_params"]["schedule_date"] = schedule_date.isoformat()
 
-    print(schedule_data)
-
     await schedules.update_one(
         {"_id": ObjectId(id), "user_id": ObjectId(user_id)},
         {"$set": schedule_data}
@@ -279,9 +277,7 @@ async def get_available_tms_pumps(user_id: str, schedule_date: date) -> List[Dic
             "plant_id": str(tm.plant_id) if tm.plant_id else None,
             "availability": str(tm.id) not in used_tms
         })
-    print(used_pumps)
     for pump in pumps:
-        print(pump.id, used_pumps, str(pump.id) not in used_pumps)
         available_pump_list.append({
             **pump.model_dump(by_alias=True),
             "id": str(pump.id),

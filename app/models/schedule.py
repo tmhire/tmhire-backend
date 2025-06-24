@@ -10,6 +10,7 @@ from app.models.pump import PumpModel
 class InputParams(BaseModel):
     quantity: float
     pumping_speed: float
+    unloading_time: int = 0
     onward_time: int
     pump_onward_time: int = 0
     pump_fixing_time: int = 0  # Time taken to fix the pump at the site
@@ -78,6 +79,8 @@ class ScheduleModel(BaseModel):
     output_table: Optional[List[Trip]] = Field(default_factory=list)
     tm_count: Optional[int] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    pumping_job: Optional[int] = None
+    floor_height: Optional[int] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
     status: str = "draft"  # draft, generated, finalized, completed, cancelled
@@ -138,6 +141,8 @@ class ScheduleCreate(BaseModel):
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    pumping_job: Optional[int] = None
+    floor_height: Optional[int] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
     input_params: InputParams
@@ -175,6 +180,8 @@ class ScheduleUpdate(BaseModel):
     pump_type: Optional[PumpType] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    pumping_job: Optional[int] = None
+    floor_height: Optional[int] = None
     
     model_config = ConfigDict(
         json_schema_extra={
