@@ -264,7 +264,7 @@ async def _get_tm_ids_and_pump_ids_by_schedule_date(target_date: date, user_id: 
         pump_id = schedule.get("pump")
         if pump_id:
             print(pump_id)
-            pump_ids.add(strh(pump_id))
+            pump_ids.add(str(pump_id))
         print(pump_ids)
     return tm_ids, pump_ids
 
