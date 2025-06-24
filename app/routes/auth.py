@@ -116,7 +116,6 @@ async def signup(user_data: UserCreate):
 
 @router.post("/signin", response_model=StandardResponse[User])
 async def login_user(user_data: UserLogin):
-    print('inside signin')
     try:
         user = await get_user_by_email(user_data.email)
         if not user or not verify_password(user_data.password, user.password):
