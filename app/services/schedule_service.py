@@ -1,6 +1,7 @@
 from app.db.mongodb import schedules, PyObjectId, transit_mixers, clients
 from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleUpdate, Trip
-from app.services.tm_service import get_all_tms, get_average_capacity, get_tm, get_available_tms
+from app.services.pump_service import get_all_pumps
+from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
 from app.services.client_service import get_client
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
 from datetime import datetime, timedelta, date, time
@@ -96,11 +97,6 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                     except ValueError:
                         # If can't parse, just leave as is and let Pydantic handle the error
                         pass
-
-        input_params = InputParams(**schedule["input_params"])
-        tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params)
-        tm_suggestion.pop("tm_count", None)
-        available_tms = await get_available_tms(user_id, schedule["input_params"]["schedule_date"])
         
         # Add cycle_time and trip_no_for_tm to each trip in output_table
         tm_trip_counter = {}
@@ -131,7 +127,12 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                 tm_trip_counter[tm_id] += 1
             trip["trip_no_for_tm"] = tm_trip_counter[tm_id]
 
-        return GetScheduleResponse(**schedule, **tm_suggestion, available_tms=available_tms)
+        input_params = InputParams(**schedule["input_params"])
+        tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params)
+        tm_suggestion.pop("tm_count", None)
+        available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["schedule_date"])
+
+        return GetScheduleResponse(**schedule, **tm_suggestion, available_tms=available_tms, available_pumps=available_pumps)
     return None
 
 async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Optional[ScheduleModel]:
@@ -245,38 +246,53 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams) -> D
         "cycle_time": cycle_time
     }
 
-async def _get_tm_ids_by_schedule_date(target_date: date, user_id: str) -> set[str]:
+async def _get_tm_ids_and_pump_ids_by_schedule_date(target_date: date, user_id: str) -> set[str]:
     target_date = _ensure_dateobj(target_date)
-    tm_ids = set()
+    tm_ids, pump_ids = set(), set()
     async for schedule in schedules.find({
         "input_params.schedule_date": target_date.isoformat(),
+        "status": "generated",
         "user_id": ObjectId(user_id)
     }):
+        print(f"Schedule: {schedule["pump"]}")
         for trip in schedule.get("output_table", []):
             tm_id = trip.get("tm_id")
             if tm_id:
                 tm_ids.add(tm_id)
+        if ("status" in schedule and schedule["status"] == "draft") or "pump" not in schedule:
+            continue
+        pump_id = schedule.get("pump")
+        if pump_id:
+            print(pump_id)
+            pump_ids.add(strh(pump_id))
+        print(pump_ids)
+    return tm_ids, pump_ids
 
-    return tm_ids
-
-async def get_available_tms(user_id: str, schedule_date: date) -> List[Dict[str, Any]]:
+async def get_available_tms_pumps(user_id: str, schedule_date: date) -> List[Dict[str, Any]]:
     tms = await get_all_tms(user_id)
-    available_tm = await _get_tm_ids_by_schedule_date(schedule_date, user_id)
-    available_tm_list = []
+    pumps = await get_all_pumps(user_id)
+    used_tms, used_pumps = await _get_tm_ids_and_pump_ids_by_schedule_date(schedule_date, user_id)
+    available_tm_list, available_pump_list = [], []
 
     for tm in tms:
-        availability = True
-        if str(tm.id) in available_tm:
-            availability = False
         available_tm_list.append({
             "id": str(tm.id),
             "identifier": tm.identifier,
             "capacity": tm.capacity,
             "plant_id": str(tm.plant_id) if tm.plant_id else None,
-            "availability": availability
+            "availability": str(tm.id) not in used_tms
+        })
+    print(used_pumps)
+    for pump in pumps:
+        print(pump.id, used_pumps, str(pump.id) not in used_pumps)
+        available_pump_list.append({
+            **pump.model_dump(by_alias=True),
+            "id": str(pump.id),
+            "availability": str(pump.id) not in used_pumps
         })
 
-    return available_tm_list
+
+    return available_tm_list, available_pump_list
 
 async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> ScheduleModel:
     """Calculate the required Transit Mixer count and create a draft schedule."""
@@ -364,7 +380,7 @@ async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> Schedule
 
     schedule_data["input_params"] = input_params
 
-    # available_tm_list = get_available_tms(user_id, schedule_date)
+    # available_tm_list = get_available_tms_pumps(user_id, schedule_date)
     tm_suggestion = await calculate_tm_suggestions(user_id, InputParams(**input_params))
 
     schedule_data["tm_count"] = tm_suggestion["tm_count"]

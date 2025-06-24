@@ -81,9 +81,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 # Include routers
-@app.get("/ping")
-async def ping():
-    return JSONResponse(content={"message": "pong"}, status_code=200)
 # edit
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(plants.router, prefix="/plants", tags=["Plants"])
@@ -107,6 +104,10 @@ async def root():
         "message": "Welcome to Concrete Supply Scheduling API",
         "data": {"version": "1.0.0"}
     }
+
+@app.get("/ping")
+async def ping():
+    return JSONResponse(content={"message": "pong"}, status_code=200)
 
 if __name__ == "__main__":
     import uvicorn

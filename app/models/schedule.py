@@ -5,6 +5,8 @@ from app.db.mongodb import PyObjectId
 from bson import ObjectId
 from enum import Enum
 
+from app.models.pump import PumpModel
+
 class InputParams(BaseModel):
     quantity: float
     pumping_speed: float
@@ -119,11 +121,15 @@ class AvailableTM(BaseModel):
     plant_id: Optional[str]
     availability: bool
 
+class AvailablePump(PumpModel):
+    availability: bool
+
 class GetScheduleResponse(ScheduleModel):
     available_tms: Optional[List[AvailableTM]] = Field(default_factory=list)
     cycle_time: Optional[float] = None  # Total cycle time for the schedule in hours
     total_trips: Optional[int] = None  # Total number of trips calculated for this schedule
     trips_per_tm: Optional[int] = None  # Average number of trips per TM for this schedule
+    available_pumps: Optional[List[AvailablePump]] = Field(default_factory=list)
 
 class ScheduleCreate(BaseModel):
     client_id: str
