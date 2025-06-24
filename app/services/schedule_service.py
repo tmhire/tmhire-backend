@@ -254,7 +254,6 @@ async def _get_tm_ids_and_pump_ids_by_schedule_date(target_date: date, user_id: 
         "status": "generated",
         "user_id": ObjectId(user_id)
     }):
-        print(f"Schedule: {schedule["pump"]}")
         for trip in schedule.get("output_table", []):
             tm_id = trip.get("tm_id")
             if tm_id:
@@ -263,9 +262,7 @@ async def _get_tm_ids_and_pump_ids_by_schedule_date(target_date: date, user_id: 
             continue
         pump_id = schedule.get("pump")
         if pump_id:
-            print(pump_id)
             pump_ids.add(str(pump_id))
-        print(pump_ids)
     return tm_ids, pump_ids
 
 async def get_available_tms_pumps(user_id: str, schedule_date: date) -> List[Dict[str, Any]]:
