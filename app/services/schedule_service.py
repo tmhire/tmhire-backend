@@ -99,7 +99,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                         pass
         
         # Add cycle_time and trip_no_for_tm to each trip in output_table
-        tm_trip_counter = {}
+        tm_trip = {}
         for trip in schedule.get("output_table", []):
             # Calculate cycle_time
             plant_start = trip.get("plant_start")
@@ -119,13 +119,19 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                 trip["cycle_time"] = (return_at - plant_start).total_seconds()
             else:
                 trip["cycle_time"] = None
-            # Calculate trip_no_for_tm
+
             tm_id = trip.get("tm_id")
-            if tm_id not in tm_trip_counter:
-                tm_trip_counter[tm_id] = 1
+            trip["cushion_time"] = 0
+            # Calculate trip_no_for_tm
+            if tm_id not in tm_trip:
+                tm_trip[tm_id] = {"last_return": None, "trip_count": 1}
             else:
-                tm_trip_counter[tm_id] += 1
-            trip["trip_no_for_tm"] = tm_trip_counter[tm_id]
+                tm_trip[tm_id]["trip_count"] += 1
+                if tm_trip[tm_id]["last_return"] and plant_start:
+                    trip["cushion_time"] = (plant_start - tm_trip[tm_id]["last_return"]).total_seconds()
+            if return_at:
+                tm_trip[tm_id]["last_return"] = return_at
+            trip["trip_no_for_tm"] = tm_trip[tm_id]["trip_count"]
 
         input_params = InputParams(**schedule["input_params"])
         tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params)

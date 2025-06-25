@@ -38,6 +38,7 @@ class Trip(BaseModel):
     completed_capacity: float = 0
     cycle_time: Optional[float] = None  # Duration of this trip in seconds
     trip_no_for_tm: Optional[int] = None  # Nth trip for this TM in the schedule
+    cushion_time: Optional[int] = None
     
     model_config = ConfigDict(
         populate_by_name=True,
