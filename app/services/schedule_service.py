@@ -1,5 +1,6 @@
 from app.db.mongodb import schedules, PyObjectId, transit_mixers, clients
 from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleUpdate, Trip
+from app.services.plant_service import get_plant
 from app.services.pump_service import get_all_pumps
 from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
 from app.services.client_service import get_client
@@ -58,7 +59,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         # Get the tm_identifiers map for any TMs in the output_table
         tm_ids = []
         for trip in schedule.get("output_table", []):
-            tm_id = trip.get("tm_no")
+            tm_id = trip.get("tm_id")
             if tm_id and ObjectId.is_valid(tm_id):
                 tm_ids.append(ObjectId(tm_id))
         
@@ -66,13 +67,15 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         if tm_ids:
             tm_map = {}
             async for tm in transit_mixers.find({"_id": {"$in": tm_ids}}):
-                tm_map[str(tm["_id"])] = tm["identifier"]
-            
+                plant = (await get_plant(tm["plant_id"], user_id)).model_dump()
+                tm_map[str(tm["_id"])] = {"identifier": tm["identifier"], "plant_name": plant["name"]}
+
             # Replace the TM IDs with their identifiers in the output_table
             for trip in schedule.get("output_table", []):
-                tm_id = trip.get("tm_no")
+                tm_id = trip.get("tm_id")
                 if tm_id and tm_id in tm_map:
-                    trip["tm_no"] = tm_map[tm_id]
+                    trip["tm_no"] = tm_map[tm_id]["identifier"]
+                    trip["plant_name"] = tm_map[tm_id]["plant_name"]
         
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
