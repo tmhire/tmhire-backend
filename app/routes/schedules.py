@@ -172,7 +172,7 @@ async def delete_existing_schedule(
 #         data=result
 #     )
 
-@router.post("/{schedule_id}/generate-schedule", response_model=StandardResponse[ScheduleModel])
+@router.post("/{schedule_id}/generate-schedule", response_model=StandardResponse[GetScheduleResponse])
 async def generate_schedule_endpoint(
     schedule_id: str,
     selected_tms: List[str],

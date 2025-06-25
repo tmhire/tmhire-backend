@@ -631,7 +631,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     # Update the calendar for this schedule
     await update_calendar_after_schedule(schedule_model)
     
-    return schedule_model
+    return await get_schedule(schedule_id, user_id)
 
 async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any]]:
     """
