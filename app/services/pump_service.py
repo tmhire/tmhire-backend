@@ -75,6 +75,7 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
     for pump in await pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None):
         pump_id = str(pump["_id"])
         plant_id = str(pump.get("plant_id", ""))
+        pump_type = pump.get("type")
         plant_name = None
         if plant_id:
             plant = await get_plant(plant_id, user_id)
@@ -83,6 +84,7 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
             id=pump_id,
             name=pump.get("identifier", "Unknown"),
             plant=plant_name,
+            type = pump_type,
             tasks=[]
         )
 
