@@ -7,7 +7,7 @@ from app.services.pump_service import (
 )
 from app.services.auth_service import get_current_user
 from app.schemas.response import StandardResponse
-from app.models.schedule_calendar import GanttRequest, GanttResponse
+from app.models.schedule_calendar import GanttRequest, PumpGanttResponse
 
 router = APIRouter(tags=["Pumps"])
 
@@ -114,7 +114,7 @@ async def get_pumps_for_plant(
         data=pumps
     )
 
-@router.post("/gantt", response_model=StandardResponse[GanttResponse])
+@router.post("/gantt", response_model=StandardResponse[PumpGanttResponse])
 async def get_pump_gantt_calendar(
     query: GanttRequest,
     current_user: UserModel = Depends(get_current_user)
@@ -126,5 +126,5 @@ async def get_pump_gantt_calendar(
     return StandardResponse(
         success=True,
         message="Pump Gantt calendar data retrieved successfully",
-        data=GanttResponse(mixers=gantt_data)
+        data=PumpGanttResponse(mixers=gantt_data)
     )

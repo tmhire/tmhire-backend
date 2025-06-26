@@ -69,12 +69,22 @@ class GanttMixer(BaseModel):
     id: str
     name: str
     plant: str
-    type: str
     tasks: List[GanttTask] = Field(default_factory=list)
 
-class GanttResponse(BaseModel):
+class TMGanttResponse(BaseModel):
     """Response model for Gantt chart data"""
-    mixers: List[GanttMixer] 
+    mixers: List[GanttMixer]
+
+class GanttPump(BaseModel):
+    """Represents a mixer in the Gantt chart"""
+    id: str
+    name: str
+    plant: str
+    type: str
+    tasks: List[GanttTask] = Field(default_factory=list)
+    
+class PumpGanttResponse(BaseModel):
+    mixers: List[GanttPump]
 
 class GanttRequest(BaseModel):
     """Body of the schedule_calendar/gantt endpoint"""
