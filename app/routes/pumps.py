@@ -126,5 +126,5 @@ async def get_pump_gantt_calendar(
     return StandardResponse(
         success=True,
         message="Pump Gantt calendar data retrieved successfully",
-        data=PumpGanttResponse(mixers=gantt_data)
+        data=PumpGanttResponse(pumps=gantt_data)
     )

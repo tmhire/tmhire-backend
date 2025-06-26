@@ -84,7 +84,7 @@ class GanttPump(BaseModel):
     tasks: List[GanttTask] = Field(default_factory=list)
     
 class PumpGanttResponse(BaseModel):
-    mixers: List[GanttPump]
+    pumps: List[GanttPump]
 
 class GanttRequest(BaseModel):
     """Body of the schedule_calendar/gantt endpoint"""
