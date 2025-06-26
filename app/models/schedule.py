@@ -139,7 +139,7 @@ class GetScheduleResponse(ScheduleModel):
 class ScheduleCreate(BaseModel):
     client_id: str
     client_name: Optional[str] = None
-    pump: Optional[PyObjectId] = None
+    # pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
