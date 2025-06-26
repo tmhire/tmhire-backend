@@ -3,7 +3,7 @@ from app.models.pump import PumpModel, PumpCreate, PumpUpdate
 from bson import ObjectId
 from typing import List, Optional
 from datetime import datetime, time, timedelta
-from app.models.schedule_calendar import GanttTask, GanttMixer
+from app.models.schedule_calendar import GanttPump, GanttTask
 from app.services.plant_service import get_plant
 
 async def get_all_pumps(user_id: str) -> List[PumpModel]:
@@ -68,7 +68,7 @@ def get_date_from_iso(iso_str):
                     except Exception:
                         return None
 
-async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[GanttMixer]:
+async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[GanttPump]:
     """Get Gantt chart data for all pumps for a given date."""
     # Get all pumps for the user
     pump_map = {}
@@ -80,7 +80,7 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
         if plant_id:
             plant = await get_plant(plant_id, user_id)
             plant_name = plant.name if plant else "Unknown Plant"
-        pump_map[pump_id] = GanttMixer(
+        pump_map[pump_id] = GanttPump(
             id=pump_id,
             name=pump.get("identifier", "Unknown"),
             plant=plant_name,

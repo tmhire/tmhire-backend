@@ -123,6 +123,7 @@ async def get_pump_gantt_calendar(
     Get Gantt chart data for all pumps for a given date.
     """
     gantt_data = await get_pump_gantt_data(query.query_date, str(current_user.id))
+    print(gantt_data)
     return StandardResponse(
         success=True,
         message="Pump Gantt calendar data retrieved successfully",
