@@ -127,6 +127,7 @@ class AvailableTM(BaseModel):
     availability: bool
 
 class AvailablePump(PumpModel):
+    id: str
     availability: bool
 
 class GetScheduleResponse(ScheduleModel):

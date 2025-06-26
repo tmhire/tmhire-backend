@@ -140,6 +140,10 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params)
         tm_suggestion.pop("tm_count", None)
         available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["schedule_date"])
+        pump_type = schedule.get("pump_type")
+        for index, pump in enumerate(available_pumps):
+            if pump.get("type") != pump_type:
+                available_pumps.pop(index)
 
         return GetScheduleResponse(**schedule, **tm_suggestion, available_tms=available_tms, available_pumps=available_pumps)
     return None
