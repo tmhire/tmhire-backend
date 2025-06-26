@@ -72,7 +72,7 @@ class ScheduleModel(BaseModel):
     user_id: PyObjectId
     client_id: Optional[PyObjectId] = None
     client_name: str
-    pump: Optional[PyObjectId] = None
+    pump: Optional[PyObjectId | str] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
