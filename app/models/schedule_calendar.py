@@ -69,6 +69,7 @@ class GanttMixer(BaseModel):
     id: str
     name: str
     plant: str
+    type: str
     tasks: List[GanttTask] = Field(default_factory=list)
 
 class GanttResponse(BaseModel):
