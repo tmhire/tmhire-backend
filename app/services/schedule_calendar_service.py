@@ -704,48 +704,78 @@ async def get_gantt_data(
         client_name = schedule.get("client_name")
         schedule_id = str(schedule["_id"])
         
-        # Process each trip in the schedule
+        # Group trips by tm_id for this schedule
+        trips_by_tm = {}
         for trip in schedule.get("output_table", []):
             tm_id = trip.get("tm_id")
-            if not tm_id or tm_id not in tm_map:
+            if not tm_id:
+                continue
+            trips_by_tm.setdefault(tm_id, []).append(trip)
+        
+        for tm_id, trips in trips_by_tm.items():
+            if tm_id not in tm_map:
                 print(f"Skipping trip for unknown TM: {tm_id}")
                 continue
-
-            # Map available trip fields to segment names
-            segment_fields = [
-                ("onward", "plant_start", "pump_start"),
-                ("work", "pump_start", "unloading_time"),
-                ("cushion", "unloading_time", "return"),
-                ("return", "plant_start", "return"),  # Optionally, the full trip
-            ]
-            for segment_name, start_key, end_key in segment_fields:
-                start_val = trip.get(start_key)
-                end_val = trip.get(end_key)
-                if not start_val or not end_val:
-                    continue
-                # Parse datetimes
-                start_dt = _parse_datetime_with_timezone(start_val) if isinstance(start_val, str) else start_val
-                end_dt = _parse_datetime_with_timezone(end_val) if isinstance(end_val, str) else end_val
-                if not start_dt or not end_dt:
-                    continue
-                # Only include if both are on the query_date
-                if start_dt.date() != query_date or end_dt.date() != query_date:
-                    continue
-                # Format times
-                start_str = start_dt.strftime("%H:%M")
-                end_str = end_dt.strftime("%H:%M")
-                # Create unique segment id
-                task_id = f"{segment_name}-{schedule_id}-{tm_id}"
-                # Create and add the GanttTask
-                task = GanttTask(
-                    id=task_id,
-                    start=start_str,
-                    end=end_str,
-                    client=client_name
-                )
-                tm_map[tm_id].tasks.append(task)
-                task_count += 1
-                print(f"Added {segment_name} task for TM {tm_id} at start {start_str} and end {end_str}")
+            # Sort trips by plant_start
+            def get_dt(val):
+                v = val.get("plant_start")
+                return _parse_datetime_with_timezone(v) if isinstance(v, str) else v
+            trips = sorted(trips, key=get_dt)
+            for i, trip in enumerate(trips):
+                # Parse all relevant datetimes
+                plant_start = trip.get("plant_start")
+                pump_start = trip.get("pump_start")
+                unloading_time = trip.get("unloading_time")
+                return_time = trip.get("return")
+                plant_start_dt = _parse_datetime_with_timezone(plant_start) if isinstance(plant_start, str) else plant_start
+                pump_start_dt = _parse_datetime_with_timezone(pump_start) if isinstance(pump_start, str) else pump_start
+                unloading_time_dt = _parse_datetime_with_timezone(unloading_time) if isinstance(unloading_time, str) else unloading_time
+                return_time_dt = _parse_datetime_with_timezone(return_time) if isinstance(return_time, str) else return_time
+                # Only add segments if both times are present and on the query_date
+                # Onward
+                if plant_start_dt and pump_start_dt and plant_start_dt.date() == query_date and pump_start_dt.date() == query_date:
+                    task_id = f"onward-{schedule_id}-{tm_id}"
+                    tm_map[tm_id].tasks.append(GanttTask(
+                        id=task_id,
+                        start=plant_start_dt.strftime("%H:%M"),
+                        end=pump_start_dt.strftime("%H:%M"),
+                        client=client_name
+                    ))
+                    task_count += 1
+                # Work
+                if pump_start_dt and unloading_time_dt and pump_start_dt.date() == query_date and unloading_time_dt.date() == query_date:
+                    task_id = f"work-{schedule_id}-{tm_id}"
+                    tm_map[tm_id].tasks.append(GanttTask(
+                        id=task_id,
+                        start=pump_start_dt.strftime("%H:%M"),
+                        end=unloading_time_dt.strftime("%H:%M"),
+                        client=client_name
+                    ))
+                    task_count += 1
+                # Return
+                if unloading_time_dt and return_time_dt and unloading_time_dt.date() == query_date and return_time_dt.date() == query_date:
+                    task_id = f"return-{schedule_id}-{tm_id}"
+                    tm_map[tm_id].tasks.append(GanttTask(
+                        id=task_id,
+                        start=unloading_time_dt.strftime("%H:%M"),
+                        end=return_time_dt.strftime("%H:%M"),
+                        client=client_name
+                    ))
+                    task_count += 1
+                # Cushion (gap to next trip)
+                if return_time_dt and i+1 < len(trips):
+                    next_trip = trips[i+1]
+                    next_plant_start = next_trip.get("plant_start")
+                    next_plant_start_dt = _parse_datetime_with_timezone(next_plant_start) if isinstance(next_plant_start, str) else next_plant_start
+                    if next_plant_start_dt and return_time_dt.date() == query_date and next_plant_start_dt.date() == query_date and next_plant_start_dt > return_time_dt:
+                        task_id = f"cushion-{schedule_id}-{tm_id}"
+                        tm_map[tm_id].tasks.append(GanttTask(
+                            id=task_id,
+                            start=return_time_dt.strftime("%H:%M"),
+                            end=next_plant_start_dt.strftime("%H:%M"),
+                            client=client_name
+                        ))
+                        task_count += 1
     
     print(f"Processed {schedule_count} schedules and created {task_count} tasks")
     
