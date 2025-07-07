@@ -114,17 +114,17 @@ async def get_pumps_for_plant(
         data=pumps
     )
 
-@router.post("/gantt", response_model=StandardResponse[PumpGanttResponse])
-async def get_pump_gantt_calendar(
-    query: GanttRequest,
-    current_user: UserModel = Depends(get_current_user)
-):
-    """
-    Get Gantt chart data for all pumps for a given date.
-    """
-    gantt_data = await get_pump_gantt_data(query.query_date, str(current_user.id))
-    return StandardResponse(
-        success=True,
-        message="Pump Gantt calendar data retrieved successfully",
-        data=PumpGanttResponse(pumps=gantt_data)
-    )
+# @router.post("/gantt", response_model=StandardResponse[PumpGanttResponse])
+# async def get_pump_gantt_calendar(
+#     query: GanttRequest,
+#     current_user: UserModel = Depends(get_current_user)
+# ):
+#     """
+#     Get Gantt chart data for all pumps for a given date.
+#     """
+#     gantt_data = await get_pump_gantt_data(query.query_date, str(current_user.id))
+#     return StandardResponse(
+#         success=True,
+#         message="Pump Gantt calendar data retrieved successfully",
+#         data=PumpGanttResponse(pumps=gantt_data)
+#     )

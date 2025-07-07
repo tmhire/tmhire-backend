@@ -1,5 +1,5 @@
-from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, PyObjectId
-from app.models.schedule_calendar import DailySchedule, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask
+from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, pumps
+from app.models.schedule_calendar import DailySchedule, GanttPump, GanttResponse, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask
 from app.models.schedule import ScheduleModel
 from datetime import datetime, date, time, timedelta, timezone
 from bson import ObjectId
@@ -645,7 +645,7 @@ def _parse_datetime_with_timezone(dt_str: str) -> datetime:
 async def get_gantt_data(
     query_date: date,
     user_id: str
-) -> List[GanttMixer]:
+) -> GanttResponse:
     """Get calendar data in Gantt chart format with multiple segments per trip"""
     print(f"Getting Gantt data for date: {query_date}")
     
@@ -665,13 +665,30 @@ async def get_gantt_data(
             tasks=[]
         )
     print(f"Found {tm_count} TMs")
+
+    # Get all pumps for the user
+    pump_map = {}
+    for pump in await pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None):
+        pump_id = str(pump["_id"])
+        plant_id = str(pump.get("plant_id", ""))
+        pump_type = pump.get("type")
+        plant_name = None
+        if plant_id:
+            plant = await get_plant(plant_id, user_id)
+            plant_name = plant.name if plant else "Unknown Plant"
+        pump_map[pump_id] = GanttPump(
+            id=pump_id,
+            name=pump.get("identifier", "Unknown"),
+            plant=plant_name,
+            type = pump_type,
+            tasks=[]
+        )
         
     query_date = _get_valid_date(query_date)
 
     # Define the start and end of the day in UTC
     start_datetime = datetime.combine(query_date, time.min).replace(tzinfo=timezone.utc)
     end_datetime = datetime.combine(query_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
-    print("dates: ", query_date, start_datetime, end_datetime)
 
     # Find all schedules in the date range
     schedule_query = {
@@ -692,14 +709,11 @@ async def get_gantt_data(
         }
     ]
     }
-    
-    print(f"Schedule query: {schedule_query}")
-    
+        
     schedule_count = 0
     task_count = 0
     async for schedule in schedules.find(schedule_query):
         schedule_count += 1
-        print(f"\nProcessing schedule {schedule['_id']}")
         
         client_name = schedule.get("client_name")
         schedule_id = str(schedule["_id"])
@@ -776,8 +790,74 @@ async def get_gantt_data(
                             client=client_name
                         ))
                         task_count += 1
+        
+        # Now handle pumps
+        pump_id = str(schedule.get("pump"))
+        client_name = schedule.get("client_name")
+        schedule_id = str(schedule["_id"])
+        if not pump_id or pump_id not in pump_map:
+            print(f"Pump {pump_id} {schedule.get("_id")} ")
+            continue
+
+        # Find the earliest pump_start and latest return in output_table
+        trips = schedule.get("output_table", [])
+        if not trips:
+            continue
+        start_time = trips[0].get("pump_start")
+        end_time = trips[-1].get("unloading_time")
+        if not start_time or not end_time:
+            continue
+        start_time = get_date_from_iso(start_time)
+        end_time = get_date_from_iso(end_time)
+        if start_time == None or end_time == None:
+            continue
+        pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
+        pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
+        if pump_onward_time > 0 and pump_fixing_time > 0:
+            # Add a task for the pump onward time
+            task = GanttTask(
+                id=f"onward-{schedule_id}-{pump_id}",
+                start=(start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))).strftime("%H:%M"),
+                end=(start_time - timedelta(minutes=pump_fixing_time)).strftime("%H:%M"),
+                client=client_name
+            )
+            pump_map[pump_id].tasks.append(task)
+            
+            task = GanttTask(
+                id=f"fixing-{schedule_id}-{pump_id}",
+                start=(start_time - timedelta(minutes=pump_fixing_time)).strftime("%H:%M"),
+                end=start_time.strftime("%H:%M"),
+                client=client_name
+            )
+            pump_map[pump_id].tasks.append(task)
+
+        
+        task = GanttTask(
+            id=f"work-{schedule_id}-{pump_id}",
+            start=start_time.strftime("%H:%M"),
+            end=end_time.strftime("%H:%M"),
+            client=client_name
+        )
+        pump_map[pump_id].tasks.append(task)
+        
+        if pump_onward_time > 0:
+            task = GanttTask(
+                id=f"return-{schedule_id}-{pump_id}",
+                start=end_time.strftime("%H:%M"),
+                end=(end_time + timedelta(minutes=pump_onward_time)).strftime("%H:%M"),
+                client=client_name
+            )
+            pump_map[pump_id].tasks.append(task)
     
     print(f"Processed {schedule_count} schedules and created {task_count} tasks")
+    print(f"Pump Gantt data for {query_date} retrieved: {pump_map}")
     
     # Convert map to list
-    return list(tm_map.values()) 
+    return GanttResponse(mixers = list(tm_map.values()), pumps = list(pump_map.values())) 
+
+def get_date_from_iso(iso_str):
+            if isinstance(iso_str, str):
+                    try:
+                        return datetime.fromisoformat(iso_str)
+                    except Exception:
+                        return None

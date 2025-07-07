@@ -458,7 +458,7 @@ async def check_tm_availability(schedule_date: date, selected_tms: List[str], us
         "unavailable_tms": unavailable_tms
     }
 
-async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: str) -> ScheduleModel:
+async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, user_id: str) -> ScheduleModel:
     """Generate the schedule based on selected Transit Mixers with single pump constraint."""
     schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
     if not schedule:
@@ -627,6 +627,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], user_id: 
     await schedules.update_one(
         {"_id": ObjectId(schedule_id)},
         {"$set": {
+            "pump": ObjectId(pump_id) if ObjectId(pump_id) else None,
             "output_table": serialized_trips,
             "status": "generated",
             "last_updated": datetime.utcnow()

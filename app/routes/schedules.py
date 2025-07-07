@@ -175,7 +175,7 @@ async def delete_existing_schedule(
 @router.post("/{schedule_id}/generate-schedule", response_model=StandardResponse[GetScheduleResponse])
 async def generate_schedule_endpoint(
     schedule_id: str,
-    selected_tms: List[str],
+    body: Dict,
     current_user: UserModel = Depends(get_current_user)
 ):
     """
@@ -191,7 +191,15 @@ async def generate_schedule_endpoint(
     Each trip includes TM assignment, timings, and concrete volumes.
     """
     try:
-        schedule = await generate_schedule(schedule_id, selected_tms, str(current_user.id))
+        selected_tms = body.get("selected_tms", [])
+        if not selected_tms or not isinstance(selected_tms, list):
+            raise ValueError("selected_tms must be a non-empty list of TM IDs")
+        
+        pump_id = body.get("pump", None)
+        if pump_id is None:
+            raise ValueError("pump ID is required to generate the schedule")
+        
+        schedule = await generate_schedule(schedule_id, selected_tms, pump_id, str(current_user.id))
         
         # Convert the schedule to a dict for safer serialization
         schedule_dict = {}

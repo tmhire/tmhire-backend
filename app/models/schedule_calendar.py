@@ -1,6 +1,6 @@
 from datetime import datetime, date, time, timedelta
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 
@@ -80,10 +80,14 @@ class GanttPump(BaseModel):
     id: str
     name: str
     plant: str
-    type: str
+    type: Literal["line", "boom"]
     tasks: List[GanttTask] = Field(default_factory=list)
     
 class PumpGanttResponse(BaseModel):
+    pumps: List[GanttPump]
+
+class GanttResponse(BaseModel):
+    mixers: List[GanttMixer]
     pumps: List[GanttPump]
 
 class GanttRequest(BaseModel):
