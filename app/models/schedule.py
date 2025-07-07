@@ -83,6 +83,7 @@ class ScheduleModel(BaseModel):
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[int] = None
     floor_height: Optional[int] = None
+    pump_site_reach_time: Optional[Union[datetime, str]] = None 
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
     status: str = "draft"  # draft, generated, finalized, completed, cancelled
@@ -146,6 +147,7 @@ class ScheduleCreate(BaseModel):
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[int] = None
     floor_height: Optional[int] = None
+    pump_site_reach_time: Union[datetime, str] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
     input_params: InputParams
@@ -185,6 +187,7 @@ class ScheduleUpdate(BaseModel):
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[int] = None
     floor_height: Optional[int] = None
+    pump_site_reach_time: Union[datetime, str] = None
     
     model_config = ConfigDict(
         json_schema_extra={
