@@ -646,7 +646,7 @@ async def get_gantt_data(
     query_date: date,
     user_id: str
 ) -> List[GanttMixer]:
-    """Get calendar data in Gantt chart format"""
+    """Get calendar data in Gantt chart format with multiple segments per trip"""
     print(f"Getting Gantt data for date: {query_date}")
     
     # Get all TMs first
@@ -710,46 +710,42 @@ async def get_gantt_data(
             if not tm_id or tm_id not in tm_map:
                 print(f"Skipping trip for unknown TM: {tm_id}")
                 continue
-                
-            # Get start and end times
-            plant_start = _parse_datetime_with_timezone(trip.get("plant_start"))
-            return_time = _parse_datetime_with_timezone(trip.get("return"))
 
-            if not plant_start or not return_time:
-                continue
-
-            print(f"Original times - plant_start: {plant_start}, return: {return_time}")
-            print(f"Original timezone - plant_start: {plant_start.tzinfo}, return: {return_time.tzinfo}")
-
-            # Keep original time without timezone conversion
-            plant_start_ist = plant_start
-            return_time_ist = return_time
-            
-            print(f"Using original times - plant_start: {plant_start_ist}, return: {return_time_ist}")
-            
-            # Skip if outside our date range
-            if plant_start_ist.date() != query_date or return_time_ist.date() != query_date:
-                print(f"Skipping trip outside date range: {plant_start_ist.date()} to {return_time_ist.date()}")
-                continue
-
-            # Format time to HH:MM
-            start_str = plant_start_ist.strftime("%H:%M")
-            return_str = return_time_ist.strftime("%H:%M")
-            
-            print(f"Final formatted times - start: {start_str}, return: {return_str}")
-            
-            # Create task with local time strings
-            task = GanttTask(
-                id=f"task-{schedule_id}-{tm_id}",
-                start=start_str,
-                end=return_str,
-                client=client_name,
-            )
-            
-            # Add task to mixer
-            tm_map[tm_id].tasks.append(task)
-            task_count += 1
-            print(f"Added task for TM {tm_id} at start time {start_str} and end time {return_str}")
+            # Map available trip fields to segment names
+            segment_fields = [
+                ("onward", "plant_start", "pump_start"),
+                ("work", "pump_start", "unloading_time"),
+                ("cushion", "unloading_time", "return"),
+                ("return", "plant_start", "return"),  # Optionally, the full trip
+            ]
+            for segment_name, start_key, end_key in segment_fields:
+                start_val = trip.get(start_key)
+                end_val = trip.get(end_key)
+                if not start_val or not end_val:
+                    continue
+                # Parse datetimes
+                start_dt = _parse_datetime_with_timezone(start_val) if isinstance(start_val, str) else start_val
+                end_dt = _parse_datetime_with_timezone(end_val) if isinstance(end_val, str) else end_val
+                if not start_dt or not end_dt:
+                    continue
+                # Only include if both are on the query_date
+                if start_dt.date() != query_date or end_dt.date() != query_date:
+                    continue
+                # Format times
+                start_str = start_dt.strftime("%H:%M")
+                end_str = end_dt.strftime("%H:%M")
+                # Create unique segment id
+                task_id = f"{segment_name}-{schedule_id}-{tm_id}"
+                # Create and add the GanttTask
+                task = GanttTask(
+                    id=task_id,
+                    start=start_str,
+                    end=end_str,
+                    client=client_name
+                )
+                tm_map[tm_id].tasks.append(task)
+                task_count += 1
+                print(f"Added {segment_name} task for TM {tm_id} at start {start_str} and end {end_str}")
     
     print(f"Processed {schedule_count} schedules and created {task_count} tasks")
     
