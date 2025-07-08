@@ -4,7 +4,7 @@ from app.models.schedule import ScheduleModel
 from datetime import datetime, date, time, timedelta, timezone
 from bson import ObjectId
 from typing import List, Dict, Optional, Any
-from app.services.plant_service import get_plant
+import asyncio
 
 # Constants for calendar setup
 CALENDAR_START_HOUR = 8  # 8AM
@@ -648,43 +648,6 @@ async def get_gantt_data(
 ) -> GanttResponse:
     """Get calendar data in Gantt chart format with multiple segments per trip"""
     print(f"Getting Gantt data for date: {query_date}")
-    
-    # Get all TMs first
-    tm_map = {}
-    tm_count = 0
-    async for tm in transit_mixers.find({"user_id": ObjectId(user_id)}):
-        tm_count += 1
-        tm_id = str(tm["_id"])
-        plant = await get_plant(tm["plant_id"], user_id)
-        plant_name = getattr(plant, "name", "Unknown Plant")
-        tm_map[tm_id] = GanttMixer(
-            id=tm_id,
-            name=tm.get("identifier", "Unknown"),
-            plant=plant_name,
-            client=None,
-            tasks=[]
-        )
-    print(f"Found {tm_count} TMs")
-
-    # Get all pumps for the user
-    pump_map = {}
-    for pump in await pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None):
-        pump_id = str(pump["_id"])
-        plant_id = str(pump.get("plant_id", ""))
-        pump_type = pump.get("type")
-        plant_name = None
-        if plant_id:
-            plant = await get_plant(plant_id, user_id)
-            plant_name = plant.name if plant else "Unknown Plant"
-        pump_map[pump_id] = GanttPump(
-            id=pump_id,
-            name=pump.get("identifier", "Unknown"),
-            plant=plant_name,
-            type = pump_type,
-            tasks=[]
-        )
-        
-    query_date = _get_valid_date(query_date)
 
     # Define the start and end of the day in UTC
     start_datetime = datetime.combine(query_date, time.min).replace(tzinfo=timezone.utc)
@@ -709,10 +672,54 @@ async def get_gantt_data(
         }
     ]
     }
+    
+    all_tms, all_pumps, queried_schedules, all_plants = await asyncio.gather(
+        transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
+        pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
+        schedules.find(schedule_query).to_list(length=None),
+        plants.find({"user_id": ObjectId(user_id)}).to_list(length=None)
+    )
+
+    plant_map = {str(plant["_id"]): plant for plant in all_plants}
+    
+    # Get all TMs first
+    tm_map = {}
+    tm_count = 0
+
+    for tm in all_tms:
+        tm_count += 1
+        tm_id = str(tm["_id"])
+        plant = plant_map.get(str(tm.get("plant_id", "")), None)
+        plant_name = getattr(plant, "name", "Unknown Plant")
+        tm_map[tm_id] = GanttMixer(
+            id=tm_id,
+            name=tm.get("identifier", "Unknown"),
+            plant=plant_name,
+            client=None,
+            tasks=[]
+        )
+    print(f"Found {tm_count} TMs")
+
+    # Get all pumps for the user
+    pump_map = {}
+    for pump in all_pumps:
+        pump_id = str(pump["_id"])
+        pump_type = pump.get("type")
+        plant = plant_map.get(str(pump.get("plant_id", "")), None)
+        plant_name = getattr(plant, "name", "Unknown Plant")
+        pump_map[pump_id] = GanttPump(
+            id=pump_id,
+            name=pump.get("identifier", "Unknown"),
+            plant=plant_name,
+            type = pump_type,
+            tasks=[]
+        )
+        
+    query_date = _get_valid_date(query_date)
         
     schedule_count = 0
     task_count = 0
-    async for schedule in schedules.find(schedule_query):
+    for schedule in queried_schedules:
         schedule_count += 1
         
         client_name = schedule.get("client_name")
