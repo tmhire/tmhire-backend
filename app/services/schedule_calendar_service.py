@@ -796,7 +796,6 @@ async def get_gantt_data(
         client_name = schedule.get("client_name")
         schedule_id = str(schedule["_id"])
         if not pump_id or pump_id not in pump_map:
-            print(f"Pump {pump_id} {schedule.get("_id")} ")
             continue
 
         # Find the earliest pump_start and latest return in output_table
