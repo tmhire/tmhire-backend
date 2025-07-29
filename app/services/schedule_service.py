@@ -2,6 +2,7 @@ from pymongo import DESCENDING
 from app.db.mongodb import schedules, PyObjectId, transit_mixers, clients
 from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleUpdate, Trip
 from app.services.plant_service import get_plant
+from app.services.project_service import get_client_from_project
 from app.services.pump_service import get_all_pumps
 from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
 from app.services.client_service import get_client
@@ -155,14 +156,13 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
     if not schedule_data:
         return await get_schedule(id, user_id)
 
-    # If client_id is updated, fetch the client information
-    if "client_id" in schedule_data:
-        client = await get_client(schedule_data["client_id"], user_id)
+    # If project_id is updated, fetch the client information
+    if "project_id" in schedule_data:
+        client = await get_client_from_project(schedule_data["project_id"], user_id)["client"]
         if client:
-            schedule_data["client_id"] = ObjectId(schedule_data["client_id"])
+            schedule_data["project_id"] = ObjectId(schedule_data["project_id"])
             # If client_name is not provided, use the client name from the client object
-            if "client_name" not in schedule_data:
-                schedule_data["client_name"] = client.name
+            schedule_data["client_name"] = client.name
 
     schedule_data["last_updated"] = datetime.utcnow()
 
@@ -304,11 +304,11 @@ async def get_available_tms_pumps(user_id: str, schedule_date: date) -> List[Dic
 async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> ScheduleModel:
     """Calculate the required Transit Mixer count and create a draft schedule."""
     # Get client information
-    client_name = schedule.client_name
-    if schedule.client_id:
-        client = await get_client(schedule.client_id, user_id)
+    schedule_data["client_name"] = schedule.client_name
+    if schedule.project_id:
+        client = await get_client_from_project(schedule_data["project_id"], user_id)["client"]
         if client:
-            client_name = client.name
+            schedule_data["client_name"] = client.name
 
     # Create a draft schedule in the database
     schedule_data = schedule.model_dump()
@@ -318,17 +318,9 @@ async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> Schedule
     schedule_data["status"] = "draft"
     schedule_data["output_table"] = []
     
-    # Convert client_id to ObjectId
-    if "client_id" in schedule_data and schedule_data["client_id"]:
-        schedule_data["client_id"] = ObjectId(schedule_data["client_id"])
-    
-    # If client_name not provided, use name from the client
-    if not client_name and "client_id" in schedule_data and schedule_data["client_id"]:
-        client = await get_client(str(schedule_data["client_id"]), user_id)
-        if client:
-            schedule_data["client_name"] = client.name
-    elif client_name:
-        schedule_data["client_name"] = client_name
+    # Convert project_id to ObjectId
+    if "project_id" in schedule_data and schedule_data["project_id"]:
+        schedule_data["project_id"] = ObjectId(schedule_data["project_id"])
     
     # Ensure input_params is included in the draft schedule and pump_start is a datetime
     input_params = schedule.input_params.model_dump()

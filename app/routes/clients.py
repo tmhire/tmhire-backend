@@ -162,14 +162,7 @@ async def read_client_stats(
     - Total delivered volume
     - Pending delivery volume
     - Recent trip summaries
-    """
-    client = await get_client(client_id, str(current_user.id))
-    if not client:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client not found"
-        )
-    
+    """    
     stats = await get_client_stats(client_id, str(current_user.id))
     return StandardResponse(
         success=True,

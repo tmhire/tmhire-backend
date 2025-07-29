@@ -1,4 +1,4 @@
-from app.db.mongodb import clients, PyObjectId, schedules
+from app.db.mongodb import clients, projects, schedules
 from app.models.client import ClientModel, ClientCreate, ClientUpdate
 from bson import ObjectId
 from datetime import datetime
@@ -13,6 +13,8 @@ async def get_all_clients(user_id: str) -> List[ClientModel]:
 
 async def get_client(id: str, user_id: str) -> Optional[ClientModel]:
     """Get a specific client by ID"""
+    if id is None:
+        return None
     client = await clients.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
     if client:
         return ClientModel(**client)
@@ -78,8 +80,9 @@ async def get_client_schedules(id: str, user_id: str) -> Dict:
         return {"client": None, "schedules": []}
     
     schedule_list = []
-    async for schedule in schedules.find({"client_id": ObjectId(id), "user_id": ObjectId(user_id)}):
-        schedule_list.append(schedule)
+    async for project in projects.find({"client_id": ObjectId(id), "user_id": ObjectId(user_id)}):
+        async for schedule in schedules.find({"project_id": ObjectId(project["_id"]), "user_id": ObjectId(user_id)}):
+            schedule_list.append(schedule)
     
     return {
         "client": client.model_dump(by_alias=True),
@@ -88,7 +91,9 @@ async def get_client_schedules(id: str, user_id: str) -> Dict:
 
 async def get_client_stats(id: str, user_id: str) -> Dict[str, Any]:
     """Get statistics for a specific client including volume metrics and trip summaries"""
-    client = await get_client(id, user_id)
+    client_schedule_list = await get_client_schedules(id, user_id)
+    client = client_schedule_list["client"]
+    all_schedules = client_schedule_list["schedules"]
     if not client:
         return {}
     
@@ -99,7 +104,7 @@ async def get_client_stats(id: str, user_id: str) -> Dict[str, Any]:
     trips = []
     
     # Query for all schedules for this client
-    async for schedule in schedules.find({"client_id": ObjectId(id), "user_id": ObjectId(user_id)}):
+    async for schedule in all_schedules:
         # Sum up scheduled volume from input parameters
         input_params = schedule.get("input_params", {})
         quantity = input_params.get("quantity", 0)
