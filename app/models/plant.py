@@ -10,7 +10,11 @@ class PlantModel(BaseModel):
     name: str
     location: str
     address: Optional[str] = None
-    contact_number: Optional[str] = None
+    coordinates: Optional[str] = None
+    contact_name1: Optional[str] = None
+    contact_number1: Optional[str] = None
+    contact_name2: Optional[str] = None
+    contact_number2: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -22,7 +26,11 @@ class PlantModel(BaseModel):
                 "name": "Main Concrete Plant",
                 "location": "Chennai",
                 "address": "123 Industrial Area, Chennai",
-                "contact_number": "9876543210"
+                "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
+                "contact_name1": "John Doe",
+                "contact_number1":"9876543210",
+                "contact_name2":"Jane Smith",
+                "contact_number2": "1234567890",
             }
         }
     )
@@ -31,7 +39,11 @@ class PlantCreate(BaseModel):
     name: str
     location: str
     address: Optional[str] = None
-    contact_number: Optional[str] = None
+    coordinates: Optional[str] = None
+    contact_name1: Optional[str] = None
+    contact_number1: Optional[str] = None
+    contact_name2: Optional[str] = None
+    contact_number2: Optional[str] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -39,7 +51,11 @@ class PlantCreate(BaseModel):
                 "name": "Main Concrete Plant",
                 "location": "Chennai",
                 "address": "123 Industrial Area, Chennai",
-                "contact_number": "9876543210"
+                "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
+                "contact_name1": "John Doe",
+                "contact_number1":"9876543210",
+                "contact_name2":"Jane Smith",
+                "contact_number2": "1234567890",
             }
         }
     )
@@ -48,7 +64,11 @@ class PlantUpdate(BaseModel):
     name: Optional[str] = None
     location: Optional[str] = None
     address: Optional[str] = None
-    contact_number: Optional[str] = None
+    coordinates: Optional[str] = None
+    contact_name1: Optional[str] = None
+    contact_number1: Optional[str] = None
+    contact_name2: Optional[str] = None
+    contact_number2: Optional[str] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -56,7 +76,11 @@ class PlantUpdate(BaseModel):
                 "name": "Updated Plant Name",
                 "location": "Updated Location",
                 "address": "Updated Address",
-                "contact_number": "1234567890"
+                "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
+                "contact_name1": "John Doe",
+                "contact_number1":"9876543210",
+                "contact_name2":"Jane Smith",
+                "contact_number2": "1234567890",
             }
         }
     ) 
