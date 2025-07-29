@@ -27,7 +27,7 @@ class CustomJSONResponse(JSONResponse):
         ).encode("utf-8")
 
 # Import routes
-from app.routes import pumps, tms, schedules, auth, plants, schedule_calendar, clients, dashboard
+from app.routes import projects, pumps, tms, schedules, auth, plants, schedule_calendar, clients, dashboard
 
 # Create FastAPI app
 app = FastAPI(
@@ -96,6 +96,7 @@ app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(schedule_calendar.router, prefix="/calendar", tags=["Schedule Calendar"])
 
 app.include_router(clients.router, prefix="/clients", tags=["Clients"])
+app.include_router(projects.router, prefix="/projects", tags=["Projects"])
 
 @app.get("/")
 async def root():
@@ -111,4 +112,4 @@ async def ping():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
