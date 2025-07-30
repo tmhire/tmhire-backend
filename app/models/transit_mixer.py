@@ -13,6 +13,7 @@ class TransitMixerModel(BaseModel):
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
     status: Literal["active", "inactive"] = Field(default="active")
+    remarks: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -28,6 +29,7 @@ class TransitMixerModel(BaseModel):
                 "driver_name": "John Doe",
                 "driver_contact": "+1234567890",
                 "status": "active",
+                "remarks": "Ready for operation",
                 "created_at": datetime.utcnow()
             }
         }
@@ -40,6 +42,7 @@ class TransitMixerCreate(BaseModel):
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
     status: Literal["active", "inactive"] = Field(default="active")
+    remarks: Optional[str] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -49,7 +52,8 @@ class TransitMixerCreate(BaseModel):
                 "capacity": 8.0,
                 "driver_name": "John Doe",
                 "driver_contact": "+1234567890",
-                "status": "active"
+                "status": "active",
+                "remarks": "Ready for operation"
             }
         }
     )
@@ -61,6 +65,7 @@ class TransitMixerUpdate(BaseModel):
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
     status: Optional[Literal["active", "inactive"]] = None
+    remarks: Optional[str] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -70,7 +75,8 @@ class TransitMixerUpdate(BaseModel):
                 "capacity": 9.0,
                 "driver_name": "Jane Smith",
                 "driver_contact": "+1987654321",
-                "status": "inactive"
+                "status": "inactive",
+                "remarks": "Under maintenance"
             }
         }
     )
