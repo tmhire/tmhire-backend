@@ -90,7 +90,12 @@ async def create_schedule(
     schedule: ScheduleCreate,
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Create a new schedule"""
+    """Create a new schedule. Requires both client_id and project_id."""
+    if not schedule.project_id or not schedule.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both project_id and client_id are required to create a schedule."
+        )
     result = await create_schedule_draft(schedule, str(current_user.id))
     return StandardResponse(
         success=True,
@@ -104,7 +109,12 @@ async def update_existing_schedule(
     schedule: ScheduleUpdate,
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Update a schedule by ID"""
+    """Update a schedule by ID. Requires both client_id and project_id if updating project."""
+    if schedule.project_id and not schedule.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="client_id is required when updating project_id."
+        )
     updated_schedule = await update_schedule(schedule_id, schedule, str(current_user.id))
     if not updated_schedule:
         raise HTTPException(

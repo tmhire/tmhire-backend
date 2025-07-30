@@ -70,7 +70,8 @@ class PumpType(str, Enum):
 class ScheduleModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: PyObjectId
-    project_id: Optional[PyObjectId] = None
+    project_id: PyObjectId  # Now always required
+    client_id: PyObjectId   # Now always required
     client_name: str
     pump: Optional[PyObjectId | str] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
@@ -100,6 +101,7 @@ class ScheduleModel(BaseModel):
             "example": {
                 "user_id": "60d5ec9af682fcd81a060e72",
                 "project_id": "60d5ec9af682fcd81a060e78",
+                "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
                 "site_address": "Chennai Main Road Site",
                 "input_params": {
@@ -140,6 +142,7 @@ class GetScheduleResponse(ScheduleModel):
 
 class ScheduleCreate(BaseModel):
     project_id: str
+    client_id: str  # Now required
     client_name: Optional[str] = None
     # pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
@@ -156,6 +159,7 @@ class ScheduleCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "project_id": "60d5ec9af682fcd81a060e78",
+                "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
                 "site_address": "Chennai Main Road Site",
                 "input_params": {
@@ -177,6 +181,7 @@ class CalculateTM(ScheduleCreate):
 
 class ScheduleUpdate(BaseModel):
     project_id: Optional[str] = None
+    client_id: Optional[str] = None  # Now required for update if project_id is updated
     client_name: Optional[str] = None
     site_address: Optional[str] = None
     input_params: Optional[InputParams] = None
@@ -193,6 +198,7 @@ class ScheduleUpdate(BaseModel):
         json_schema_extra={
             "example": {
                 "project_id": "60d5ec9af682fcd81a060e79",
+                "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "XYZ Constructions",
                 "site_address": "Updated Location",
                 "input_params": {

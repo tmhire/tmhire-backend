@@ -156,13 +156,22 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
     if not schedule_data:
         return await get_schedule(id, user_id)
 
-    # If project_id is updated, fetch the client information
+    # Always require project_id and update client_id accordingly
     if "project_id" in schedule_data:
-        client = await get_client_from_project(schedule_data["project_id"], user_id)["client"]
-        if client:
-            schedule_data["project_id"] = ObjectId(schedule_data["project_id"])
-            # If client_name is not provided, use the client name from the client object
-            schedule_data["client_name"] = client.name
+        from app.services.project_service import get_project
+        project = await get_project(schedule_data["project_id"], user_id)
+        if not project:
+            raise ValueError("Project not found or does not belong to user.")
+        client_id = getattr(project, "client_id", None)
+        if not client_id:
+            raise ValueError("Project does not have a client_id.")
+        from app.services.client_service import get_client
+        client = await get_client(str(client_id), user_id)
+        if not client:
+            raise ValueError("Client not found for the given project.")
+        schedule_data["project_id"] = ObjectId(schedule_data["project_id"])
+        schedule_data["client_id"] = ObjectId(str(client_id))
+        schedule_data["client_name"] = client.name
 
     schedule_data["last_updated"] = datetime.utcnow()
 
@@ -302,29 +311,34 @@ async def get_available_tms_pumps(user_id: str, schedule_date: date) -> List[Dic
     return available_tm_list, available_pump_list
 
 async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> ScheduleModel:
-    """Calculate the required Transit Mixer count and create a draft schedule."""
-    # Get client information
-    schedule_data["client_name"] = schedule.client_name
-    if schedule.project_id:
-        client = await get_client_from_project(schedule_data["project_id"], user_id)["client"]
-        if client:
-            schedule_data["client_name"] = client.name
-
-    # Create a draft schedule in the database
+    """Calculate the required Transit Mixer count and create a draft schedule. Always require both client and project."""
+    # Validate and fetch project
+    if not schedule.project_id:
+        raise ValueError("A project_id is required to create a schedule.")
+    from app.services.project_service import get_project
+    project = await get_project(schedule.project_id, user_id)
+    if not project:
+        raise ValueError("Project not found or does not belong to user.")
+    client_id = getattr(project, "client_id", None)
+    if not client_id:
+        raise ValueError("Project does not have a client_id.")
+    from app.services.client_service import get_client
+    client = await get_client(str(client_id), user_id)
+    if not client:
+        raise ValueError("Client not found for the given project.")
+    # Prepare schedule data
     schedule_data = schedule.model_dump()
     schedule_data["user_id"] = ObjectId(user_id)
     schedule_data["created_at"] = datetime.utcnow()
     schedule_data["last_updated"] = datetime.utcnow()
     schedule_data["status"] = "draft"
     schedule_data["output_table"] = []
-    
-    # Convert project_id to ObjectId
-    if "project_id" in schedule_data and schedule_data["project_id"]:
-        schedule_data["project_id"] = ObjectId(schedule_data["project_id"])
-    
+    # Store both client_id and project_id
+    schedule_data["project_id"] = ObjectId(schedule.project_id)
+    schedule_data["client_id"] = ObjectId(str(client_id))
+    schedule_data["client_name"] = client.name
     # Ensure input_params is included in the draft schedule and pump_start is a datetime
     input_params = schedule.input_params.model_dump()
-    
     # Extract and standardize schedule_date
     schedule_date = None
     if "schedule_date" in input_params:
@@ -341,20 +355,14 @@ async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> Schedule
                     schedule_date = datetime.now().date()
             input_params["schedule_date"] = schedule_date.isoformat()
     else:
-        # If no schedule_date provided, use today's date
         schedule_date = datetime.now().date()
         input_params["schedule_date"] = schedule_date.isoformat()
-    
-    print(f"Using schedule_date: {schedule_date} for all datetime fields")
-    
     # Process pump_start time
     pump_start_time = None
     if "pump_start" in input_params:
         if isinstance(input_params["pump_start"], datetime):
-            # Extract just the time component
             pump_start_time = input_params["pump_start"].time()
         elif isinstance(input_params["pump_start"], dict) and "$date" in input_params["pump_start"]:
-            # Handle MongoDB $date format
             if isinstance(input_params["pump_start"]["$date"], str):
                 date_str = input_params["pump_start"]["$date"]
                 pump_start_time = datetime.fromisoformat(date_str.replace("Z", "+00:00")).time()
@@ -362,30 +370,19 @@ async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> Schedule
                 pump_start_time = datetime.fromtimestamp(input_params["pump_start"]["$date"] / 1000).time()
         elif isinstance(input_params["pump_start"], str):
             try:
-                if "T" in input_params["pump_start"]:  # ISO format with date and time
+                if "T" in input_params["pump_start"]:
                     pump_start_time = datetime.fromisoformat(input_params["pump_start"]).time()
-                else:  # Just time component
+                else:
                     pump_start_time = datetime.strptime(input_params["pump_start"], "%H:%M").time()
             except ValueError:
                 pump_start_time = time(8, 0)
-    
-    # Default to 8:00 AM if we couldn't get a time
     if not pump_start_time:
         pump_start_time = time(8, 0)
-    
-    # Combine schedule_date with pump_start_time
     input_params["pump_start"] = datetime.combine(schedule_date, pump_start_time)
-    print(f"Setting pump_start to: {input_params['pump_start']}")
-
     schedule_data["input_params"] = input_params
-
-    # available_tm_list = get_available_tms_pumps(user_id, schedule_date)
     tm_suggestion = await calculate_tm_suggestions(user_id, InputParams(**input_params))
-
     schedule_data["tm_count"] = tm_suggestion["tm_count"]
-
     result = await schedules.insert_one(schedule_data)
-    
     new_schedule = await schedules.find_one({"_id": result.inserted_id, "user_id": ObjectId(user_id)})
     if new_schedule:
         return ScheduleModel(**new_schedule)
