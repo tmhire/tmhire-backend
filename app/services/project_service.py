@@ -25,7 +25,7 @@ async def create_project(project: ProjectCreate, user_id: str) -> ProjectModel:
     """Create a new project"""
     project_data = project.model_dump()
     project_data["user_id"] = ObjectId(user_id)
-    client = get_project(project.get("client_id", None), user_id)
+    client = await get_client(str(project.client_id), user_id)
     if client is None:
         raise ValueError("Client ID does not exist")
     project_data["created_at"] = datetime.utcnow()
@@ -108,7 +108,7 @@ async def get_client_from_project(project_id: str, user_id: str) -> Optional[Dic
             "project": None
         }
     
-    client = await get_client(project.get("client_id", None), user_id)
+    client = await get_client(str(project.client_id), user_id)
     if client:
         return {
             "client": client,
