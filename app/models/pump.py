@@ -13,6 +13,9 @@ class PumpModel(BaseModel):
     type: Literal["line", "boom"]
     status: Literal["active", "inactive"] = Field(default="active")
     make: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    remarks: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(
@@ -28,6 +31,9 @@ class PumpModel(BaseModel):
                 "type": "boom",
                 "status": "active",
                 "make": "Ashok Leyland",
+                "driver_name": "John Doe",
+                "driver_contact": "+1234567890",
+                "remarks": "Ready for operation",
                 "created_at": datetime.utcnow()
             }
         }
@@ -40,6 +46,9 @@ class PumpCreate(BaseModel):
     type: Literal["line", "boom"]
     status: Literal["active", "inactive"] = Field(default="active")
     make: str
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    remarks: Optional[str] = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -49,6 +58,9 @@ class PumpCreate(BaseModel):
                 "capacity": 50.0,
                 "type": "line",
                 "status": "active",
+                "driver_name": "John Doe",
+                "driver_contact": "+1234567890",
+                "remarks": "Ready for operation",
                 "make": "Ashok Leyland"
             }
         }
@@ -61,6 +73,9 @@ class PumpUpdate(BaseModel):
     type: Optional[Literal["line", "boom"]] = None
     status: Optional[Literal["active", "inactive"]] = None
     make: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    remarks: Optional[str] = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -70,6 +85,9 @@ class PumpUpdate(BaseModel):
                 "capacity": 60.0,
                 "type": "boom",
                 "status": "inactive",
+                "driver_name": "John Doe",
+                "driver_contact": "+1234567890",
+                "remarks": "Ready for operation",
                 "make": "Ashok Leyland"
             }
         }
