@@ -70,7 +70,7 @@ class PumpType(str, Enum):
 class ScheduleModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: PyObjectId
-    project_id: PyObjectId  # Now always required
+    project_id: Optional[PyObjectId] = None  # Now always required
     client_id: PyObjectId   # Now always required
     client_name: str
     pump: Optional[PyObjectId | str] = None
