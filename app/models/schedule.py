@@ -58,7 +58,9 @@ class Trip(BaseModel):
                 "return": "2023-06-25T09:52:00",
                 "completed_capacity": 8.0,
                 "cycle_time": 4920.0,
-                "trip_no_for_tm": 1
+                "trip_no_for_tm": 1,
+                "cushion_time": 2,
+                "plant_name": "Main Plant"
             }
         }
     )
@@ -104,6 +106,8 @@ class ScheduleModel(BaseModel):
                 "project_id": "60d5ec9af682fcd81a060e78",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
+                "pump": "60d5ec9af682fcd81a060e73",
+                "pump_type": "boom",
                 "site_address": "Chennai Main Road Site",
                 "input_params": {
                     "quantity": 60,
@@ -118,6 +122,11 @@ class ScheduleModel(BaseModel):
                     "schedule_date": "2023-06-25"
                 },
                 "tm_count": 6,
+                "concreteGrade": 25,
+                "pumping_job": 1,
+                "floor_height": 10,
+                "pump_site_reach_time": "2023-06-25T07:30:00",
+                "pumping_speed": 30,
                 "pumping_time": 2.0,
                 "status": "draft"
             }
@@ -163,7 +172,14 @@ class ScheduleCreate(BaseModel):
                 "project_id": "60d5ec9af682fcd81a060e78",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
+                "pump_type": "boom",
                 "site_address": "Chennai Main Road Site",
+                "concreteGrade": 25,
+                "pumping_job": 1,
+                "floor_height": 10,
+                "pump_site_reach_time": "2023-06-25T07:30:00",
+                "pumping_speed": 30,
+                "pumping_time": 2.0,
                 "input_params": {
                     "quantity": 60,
                     "pumping_speed": 30,
@@ -217,7 +233,14 @@ class ScheduleUpdate(BaseModel):
                     "pump_start": "2023-06-26T08:00:00",
                     "schedule_date": "2023-06-26"
                 },
-                "status": "draft"
+                "status": "draft",
+                "pump": "60d5ec9af682fcd81a060e73",
+                "pump_type": "boom",
+                "pumping_speed": 35,
+                "concreteGrade": 30,
+                "pumping_job": 2,
+                "floor_height": 12,
+                "pump_site_reach_time": "2023-06-26T07:30:00"
             }
         }
     ) 
