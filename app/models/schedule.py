@@ -12,8 +12,9 @@ class InputParams(BaseModel):
     pumping_speed: float
     unloading_time: int = 0
     onward_time: int
-    pump_onward_time: int = 0
+    pump_start_time_from_plant: str
     pump_fixing_time: int = 0  # Time taken to fix the pump at the site
+    pump_removal_time: int = 0
     return_time: int
     buffer_time: int
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
@@ -108,8 +109,9 @@ class ScheduleModel(BaseModel):
                     "quantity": 60,
                     "pumping_speed": 30,
                     "onward_time": 30,
-                    "pump_onward_time": 25,
+                    "pump_start_time_from_plant": "2023-06-25T08:00:00",
                     "pump_fixing_time": 10,
+                    "pump_removal_time": 10,
                     "return_time": 25,
                     "buffer_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
@@ -166,7 +168,9 @@ class ScheduleCreate(BaseModel):
                     "quantity": 60,
                     "pumping_speed": 30,
                     "onward_time": 30,
-                    "pump_onward_time": 25,
+                    "pump_start_time_from_plant": "2023-06-25T08:00:00",
+                    "pump_fixing_time": 10,
+                    "pump_removal_time": 10,
                     "return_time": 25,
                     "buffer_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
@@ -205,7 +209,9 @@ class ScheduleUpdate(BaseModel):
                     "quantity": 70,
                     "pumping_speed": 35,
                     "onward_time": 30,
-                    "pump_onward_time": 25,
+                    "pump_start_time_from_plant": "2023-06-26T08:00:00",
+                    "pump_fixing_time": 10,
+                    "pump_removal_time": 10,
                     "return_time": 25,
                     "buffer_time": 5,
                     "pump_start": "2023-06-26T08:00:00",

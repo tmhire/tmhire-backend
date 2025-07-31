@@ -238,7 +238,7 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams) -> D
     buffer_time = input_params.buffer_time
     quantity = input_params.quantity
     pumping_speed = input_params.pumping_speed
-    pump_onward_time = input_params.pump_onward_time
+    pump_start_from_plant = input_params.pump_start_time_from_plant
 
     # Calculate cycle time components
     unloading_time = get_unloading_time(avg_capacity)

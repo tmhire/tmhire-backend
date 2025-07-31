@@ -811,19 +811,22 @@ async def get_gantt_data(
             continue
         start_time = trips[0].get("pump_start")
         end_time = trips[-1].get("unloading_time")
-        if not start_time or not end_time:
+        pump_start_from_plant = schedule.get("input_params", {}).get("pump_start_from_plant", "")
+        if not start_time or not end_time or not pump_start_from_plant:
             continue
         start_time = get_date_from_iso(start_time)
         end_time = get_date_from_iso(end_time)
-        if start_time == None or end_time == None:
+        pump_start_from_plant = get_date_from_iso(pump_start_from_plant)
+        if start_time == None or end_time == None or pump_start_from_plant == None:
             continue
-        pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
+        pump_onward_time = int((start_time - timedelta(minutes=pump_fixing_time) - pump_start_from_plant).total_seconds() // 60)
         pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
+        pump_removal_time = schedule.get("input_params", {}).get("pump_removal_time", 0)
         if pump_onward_time > 0 and pump_fixing_time > 0:
             # Add a task for the pump onward time
             task = GanttTask(
                 id=f"onward-{schedule_id}-{pump_id}",
-                start=(start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))).strftime("%H:%M"),
+                start=(pump_start_from_plant).strftime("%H:%M"),
                 end=(start_time - timedelta(minutes=pump_fixing_time)).strftime("%H:%M"),
                 client=client_name
             )
@@ -845,12 +848,21 @@ async def get_gantt_data(
             client=client_name
         )
         pump_map[pump_id].tasks.append(task)
+
+        if pump_removal_time > 0:
+            task = GanttTask(
+                id=f"removal-{schedule_id}-{pump_id}",
+                start=end_time.strftime("%H:%M"),
+                end=(end_time + timedelta(minutes=pump_removal_time)).strftime("%H:%M"),
+                client=client_name
+            )
+            pump_map[pump_id].tasks.append(task)
         
         if pump_onward_time > 0:
             task = GanttTask(
                 id=f"return-{schedule_id}-{pump_id}",
-                start=end_time.strftime("%H:%M"),
-                end=(end_time + timedelta(minutes=pump_onward_time)).strftime("%H:%M"),
+                start=(end_time + timedelta(minutes=pump_removal_time)).strftime("%H:%M"),
+                end=(end_time + timedelta(minutes=pump_removal_time + pump_onward_time)).strftime("%H:%M"),
                 client=client_name
             )
             pump_map[pump_id].tasks.append(task)
