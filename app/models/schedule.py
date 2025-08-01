@@ -130,7 +130,7 @@ class ScheduleModel(BaseModel):
                 "pumping_speed": 30,
                 "pumping_time": 2.0,
                 "status": "draft",
-                "type": "pumping"
+                "type": "supply"
             }
         }
     )
@@ -195,7 +195,7 @@ class ScheduleCreate(BaseModel):
                     "pump_start": "2023-06-25T08:00:00",
                     "schedule_date": "2023-06-25"
                 },
-                "type": "pumping"
+                "type": "supply"
             }
         }
     )
@@ -246,7 +246,7 @@ class ScheduleUpdate(BaseModel):
                 "pumping_job": 2,
                 "floor_height": 12,
                 "pump_site_reach_time": "2023-06-26T07:30:00",
-                "type": "pumping"
+                "type": "supply"
             }
         }
     ) 

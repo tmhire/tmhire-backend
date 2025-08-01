@@ -206,8 +206,6 @@ async def generate_schedule_endpoint(
             raise ValueError("selected_tms must be a non-empty list of TM IDs")
         
         pump_id = body.get("pump", None)
-        if pump_id is None:
-            raise ValueError("pump ID is required to generate the schedule")
         
         schedule = await generate_schedule(schedule_id, selected_tms, pump_id, str(current_user.id))
         

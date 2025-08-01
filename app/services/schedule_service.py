@@ -536,7 +536,72 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     pump_available_time = base_time  # pump is free at this time
     
     # Maximum time to wait for a previously used TM before using a different one (in minutes)
-    max_wait_time = 15  
+    max_wait_time = 15
+
+    if schedule["type"] == "supply":
+        selected_tm = selected_tms[0]  # For supply schedules, we only use one TM
+        tm_identifier = tm_map.get(selected_tm, selected_tm)
+        tm_capacity = tm_capacities.get(selected_tm, avg_capacity)
+        # if tm_capacity < total_quantity:
+        #     raise ValueError(f"Selected TM {tm_identifier} capacity {tm_capacity} is less than total quantity {total_quantity}.")
+        
+        tm_unloading_time = UNLOADING_TIME_LOOKUP.get(tm_capacity)
+        if tm_unloading_time is None:
+            tm_unloading_time = get_unloading_time(tm_capacity)
+
+        pump_start = base_time
+        plant_start = pump_start - timedelta(minutes=onward_time)
+        unloading_end = pump_start + timedelta(minutes=tm_unloading_time)
+        return_at = unloading_end + timedelta(minutes=return_time)
+
+        tm_usage_count[selected_tm] += 1
+        tm_trip_counter[selected_tm] += 1
+
+        completed_quantity = tm_capacity
+
+        cycle_time = (return_at - plant_start).total_seconds()
+        trip_no_for_tm = tm_trip_counter[selected_tm]
+
+        # Use datetime objects directly
+        trip = Trip(
+            trip_no=trip_no,
+            tm_no=tm_identifier,
+            tm_id=selected_tm,
+            plant_start=plant_start,
+            pump_start=pump_start,
+            unloading_time=unloading_end,
+            return_=return_at,
+            completed_capacity=completed_quantity,
+            cycle_time=cycle_time,
+            trip_no_for_tm=trip_no_for_tm
+        )
+
+        trips.append(trip)
+
+        # Safely serialize the trips to ensure all datetimes are properly converted
+        serialized_trips = safe_serialize([trip.model_dump(by_alias=True) for trip in trips])
+
+        # Update schedule
+        await schedules.update_one(
+            {"_id": ObjectId(schedule_id)},
+            {"$set": {
+                "output_table": serialized_trips,
+                "status": "generated",
+                "last_updated": datetime.utcnow()
+            }}
+        )
+
+        updated_schedule = await schedules.find_one({"_id": ObjectId(schedule_id)})
+        schedule_model = ScheduleModel(**updated_schedule)
+        
+        # Update the calendar for this schedule
+        await update_calendar_after_schedule(schedule_model)
+        
+        return await get_schedule(schedule_id, user_id)
+    
+    
+    if pump_id is None:
+        raise ValueError("pump ID is required to generate the schedule")
 
     while completed_quantity < total_quantity:
         trip_no += 1
