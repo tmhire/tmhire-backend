@@ -12,7 +12,7 @@ class InputParams(BaseModel):
     pumping_speed: float
     unloading_time: int = 0
     onward_time: int
-    pump_start_time_from_plant: Optional[str]
+    pump_start_time_from_plant: Optional[str] = None
     pump_fixing_time: Optional[int] = 0  # Time taken to fix the pump at the site
     pump_removal_time: Optional[int] = 0
     return_time: int
