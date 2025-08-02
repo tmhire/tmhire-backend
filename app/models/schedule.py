@@ -69,6 +69,10 @@ class PumpType(str, Enum):
     LINE = "line"
     BOOM = "boom"
 
+class ScheduleType(str, Enum):
+    supply = "supply"
+    pumping = "pumping"
+
 
 class ScheduleModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
@@ -91,7 +95,7 @@ class ScheduleModel(BaseModel):
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
     status: str = "draft"  # draft, generated, finalized, completed, cancelled
-    type: Optional[str] = "pumping"
+    type: Optional[ScheduleType] = "pumping"
     
     model_config = ConfigDict(
         populate_by_name=True,

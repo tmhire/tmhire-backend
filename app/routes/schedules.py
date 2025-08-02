@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional, Dict, Any
 from datetime import date
-from app.models.schedule import GetScheduleResponse, ScheduleCreate, ScheduleModel, CalculateTM, ScheduleUpdate
+from app.models.schedule import GetScheduleResponse, ScheduleCreate, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate
 from app.models.user import UserModel
 from app.services.schedule_service import (
     get_all_schedules,
@@ -19,9 +19,13 @@ from app.schemas.utils import safe_serialize
 router = APIRouter(tags=["Schedules"])
 
 @router.get("/", response_model=StandardResponse[List[ScheduleModel]])
-async def read_schedules(current_user: UserModel = Depends(get_current_user)):
+async def read_schedules(
+    type: ScheduleType = Query(ScheduleType.pumping, description="Filter schedules by type: 'supply' or 'pumping'"),
+    current_user: UserModel = Depends(get_current_user)
+):
     """Get all schedules for the current user"""
-    schedules = await get_all_schedules(str(current_user.id))
+
+    schedules = await get_all_schedules(str(current_user.id), type)
     
     # Safely serialize to handle any date/datetime objects
     schedule_list = [schedule.model_dump() for schedule in schedules]

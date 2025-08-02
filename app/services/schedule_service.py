@@ -1,6 +1,6 @@
 from pymongo import DESCENDING
 from app.db.mongodb import schedules, PyObjectId, transit_mixers, clients
-from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleUpdate, Trip
+from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip
 from app.services.plant_service import get_plant
 from app.services.project_service import get_client_from_project
 from app.services.pump_service import get_all_pumps
@@ -24,9 +24,9 @@ UNLOADING_TIME_LOOKUP = {
     12: 20
 }
 
-async def get_all_schedules(user_id: str) -> List[ScheduleModel]:
+async def get_all_schedules(user_id: str, type: ScheduleType) -> List[ScheduleModel]:
     schedule_list = []
-    async for schedule in schedules.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
+    async for schedule in schedules.find({"user_id": ObjectId(user_id), "type": type.value}).sort("created_at", DESCENDING):
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
         
