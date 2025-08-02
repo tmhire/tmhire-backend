@@ -674,6 +674,58 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
 
         trips.append(trip)
 
+    # Add an additional buffer trip
+    trip_no += 1
+    selected_tm = None
+    earliest_effective_site_arrival_for_best_tm = datetime.max 
+
+    target_site_arrival_for_current_trip = unloading_end + timedelta(minutes=1) if trip_no > 1 else pump_available_time
+    for tm in selected_tms:
+            # Calculate when TM becomes available after buffer time
+            min_tm_departure_time = tm_available_times[tm]
+            # Add buffer time to determine when TM is actually available for next trip
+            tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time)
+            potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time)
+            effective_site_arrival = max(target_site_arrival_for_current_trip, potential_tm_arrival_time)
+
+            if effective_site_arrival < earliest_effective_site_arrival_for_best_tm:
+                earliest_effective_site_arrival_for_best_tm = effective_site_arrival
+                selected_tm = tm
+            elif effective_site_arrival == earliest_effective_site_arrival_for_best_tm:
+                if selected_tm is None or tm_usage_count[tm] < tm_usage_count[selected_tm]:
+                    selected_tm = tm
+
+    tm_identifier = tm_map.get(selected_tm, selected_tm)
+
+    pump_start = earliest_effective_site_arrival_for_best_tm
+    plant_start = pump_start - timedelta(minutes=onward_time)
+    unloading_end = pump_start + timedelta(minutes=buffer_time)
+    return_at = unloading_end + timedelta(minutes=return_time)
+
+    # Update next available time to include buffer time
+    tm_available_times[selected_tm] = return_at
+    tm_usage_count[selected_tm] += 1
+    tm_trip_counter[selected_tm] += 1
+
+    # Calculate cycle_time (return_ - plant_start in seconds)
+    cycle_time = (return_at - plant_start).total_seconds()
+    trip_no_for_tm = tm_trip_counter[selected_tm]
+
+    # Use datetime objects directly
+    trip = Trip(
+        trip_no=trip_no,
+        tm_no=tm_identifier,
+        tm_id=selected_tm,
+        plant_start=plant_start,
+        pump_start=pump_start,
+        unloading_time=unloading_end,
+        return_=return_at,
+        completed_capacity=total_quantity,
+        cycle_time=cycle_time,
+        trip_no_for_tm=trip_no_for_tm
+    )
+    trips.append(trip)
+    
     # Safely serialize the trips to ensure all datetimes are properly converted
     serialized_trips = safe_serialize([trip.model_dump(by_alias=True) for trip in trips])
 
