@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.plant import PlantModel, PlantCreate, PlantUpdate
-from app.models.transit_mixer import TransitMixerModel
 from app.models.user import UserModel
 from app.services.plant_service import (
     get_all_plants, get_plant, create_plant, update_plant, delete_plant, get_plant_tms

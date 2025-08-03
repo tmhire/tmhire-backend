@@ -1,4 +1,4 @@
-from app.db.mongodb import plants, PyObjectId, transit_mixers
+from app.db.mongodb import plants, transit_mixers
 from app.models.plant import PlantModel, PlantCreate, PlantUpdate
 from bson import ObjectId
 from typing import List, Optional, Dict

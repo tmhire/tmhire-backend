@@ -1,11 +1,9 @@
 from pymongo import DESCENDING
-from app.db.mongodb import schedules, PyObjectId, transit_mixers, clients
+from app.db.mongodb import schedules, transit_mixers
 from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip
 from app.services.plant_service import get_plant
-from app.services.project_service import get_client_from_project
 from app.services.pump_service import get_all_pumps
 from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
-from app.services.client_service import get_client
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
 from datetime import datetime, timedelta, date, time
 from bson import ObjectId

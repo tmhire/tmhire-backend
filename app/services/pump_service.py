@@ -1,8 +1,8 @@
-from app.db.mongodb import pumps, PyObjectId, schedules
+from app.db.mongodb import pumps, schedules
 from app.models.pump import PumpModel, PumpCreate, PumpUpdate
 from bson import ObjectId
 from typing import List, Optional
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 from app.models.schedule_calendar import GanttPump, GanttTask
 from app.services.plant_service import get_plant
 

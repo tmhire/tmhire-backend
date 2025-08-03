@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
-from app.models.pump import PumpModel, PumpCreate, PumpUpdate, AveragePumpCapacity
+from app.models.pump import PumpModel, PumpCreate, PumpUpdate
 from app.models.user import UserModel
 from app.services.pump_service import (
-    get_all_pumps, get_pump, create_pump, update_pump, delete_pump, get_pumps_by_plant, get_pump_gantt_data
+    get_all_pumps, get_pump, create_pump, update_pump, delete_pump, get_pumps_by_plant
 )
 from app.services.auth_service import get_current_user
 from app.schemas.response import StandardResponse

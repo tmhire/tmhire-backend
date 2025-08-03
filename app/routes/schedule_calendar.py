@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends
 from datetime import date
 from app.models.user import UserModel
-from app.models.schedule_calendar import DailySchedule, GanttRequest, GanttResponse, ScheduleCalendarQuery, TMGanttResponse, GanttMixer
+from app.models.schedule_calendar import DailySchedule, GanttRequest, GanttResponse, ScheduleCalendarQuery
 from app.services.schedule_calendar_service import (
     get_calendar_for_date_range,
     get_tm_availability,

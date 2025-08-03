@@ -1,6 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 

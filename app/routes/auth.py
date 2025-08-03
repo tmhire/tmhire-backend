@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.user import UserLogin, UserModel, UserCreate, UserUpdate
 from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, refreshing_access_token, update_user_data, validate_google_token, verify_password
 from datetime import timedelta
-from typing import Dict
 from pydantic import BaseModel
 from app.schemas.response import StandardResponse
 

@@ -1,4 +1,4 @@
-from app.db.mongodb import transit_mixers, schedules, PyObjectId
+from app.db.mongodb import transit_mixers, schedules
 from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, TransitMixerUpdate
 from bson import ObjectId
 from typing import List, Optional, Dict, Any

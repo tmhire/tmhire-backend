@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, TransitMixerStatusToggle, TransitMixerUpdate, AverageCapacity
+from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, TransitMixerUpdate, AverageCapacity
 from app.models.user import UserModel
 from app.services.tm_service import (
     get_all_tms, get_tm, create_tm, update_tm, delete_tm, get_average_capacity,
