@@ -2,7 +2,7 @@ from app.db.mongodb import pumps, schedules
 from app.models.pump import PumpModel, PumpCreate, PumpUpdate
 from bson import ObjectId
 from typing import List, Optional
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from app.models.schedule_calendar import GanttPump, GanttTask
 from app.services.plant_service import get_plant
 
@@ -108,7 +108,7 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
         trips = schedule.get("output_table", [])
         if not trips:
             continue
-        start_time = schedule.get("input_params", {}).get("pump_start_time_from_plant")
+        start_time = trips[0].get("pump_start")
         end_time = trips[-1].get("unloading_time")
         if not start_time or not end_time:
             continue
@@ -116,9 +116,9 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
         end_time = get_date_from_iso(end_time)
         if start_time == None or end_time == None:
             continue
-        # pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
-        # pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
-        # start_time = start_time - timedelta(minutes=pump_onward_time + pump_fixing_time)
+        pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
+        pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
+        start_time = start_time - timedelta(minutes=pump_onward_time + pump_fixing_time)
         task = GanttTask(
             id=f"task-{schedule_id}-{pump_id}",
             start=start_time.strftime("%H:%M"),

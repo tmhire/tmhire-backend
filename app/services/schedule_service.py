@@ -236,7 +236,7 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams) -> D
     buffer_time = input_params.buffer_time
     quantity = input_params.quantity
     pumping_speed = input_params.pumping_speed
-    pump_start_from_plant = input_params.pump_start_time_from_plant
+    pump_onward_time = input_params.pump_onward_time
 
     # Calculate cycle time components
     unloading_time = get_unloading_time(avg_capacity)
@@ -535,72 +535,6 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     
     # Maximum time to wait for a previously used TM before using a different one (in minutes)
     max_wait_time = 15
-
-    if schedule["type"] == "supply":
-        selected_tm = selected_tms[0]  # For supply schedules, we only use one TM
-        tm_identifier = tm_map.get(selected_tm, selected_tm)
-        tm_capacity = tm_capacities.get(selected_tm, avg_capacity)
-        # if tm_capacity < total_quantity:
-        #     raise ValueError(f"Selected TM {tm_identifier} capacity {tm_capacity} is less than total quantity {total_quantity}.")
-        
-        tm_unloading_time = UNLOADING_TIME_LOOKUP.get(tm_capacity)
-        if tm_unloading_time is None:
-            tm_unloading_time = get_unloading_time(tm_capacity)
-
-        pump_start = base_time
-        plant_start = pump_start - timedelta(minutes=onward_time)
-        unloading_end = pump_start + timedelta(minutes=tm_unloading_time)
-        return_at = unloading_end + timedelta(minutes=return_time)
-
-        tm_usage_count[selected_tm] += 1
-        tm_trip_counter[selected_tm] += 1
-
-        completed_quantity = tm_capacity
-
-        cycle_time = (return_at - plant_start).total_seconds()
-        trip_no_for_tm = tm_trip_counter[selected_tm]
-
-        # Use datetime objects directly
-        trip = Trip(
-            trip_no=trip_no,
-            tm_no=tm_identifier,
-            tm_id=selected_tm,
-            plant_start=plant_start,
-            pump_start=pump_start,
-            unloading_time=unloading_end,
-            return_=return_at,
-            completed_capacity=completed_quantity,
-            cycle_time=cycle_time,
-            trip_no_for_tm=trip_no_for_tm
-        )
-
-        trips.append(trip)
-
-        # Safely serialize the trips to ensure all datetimes are properly converted
-        serialized_trips = safe_serialize([trip.model_dump(by_alias=True) for trip in trips])
-
-        # Update schedule
-        await schedules.update_one(
-            {"_id": ObjectId(schedule_id)},
-            {"$set": {
-                "output_table": serialized_trips,
-                "status": "generated",
-                "last_updated": datetime.utcnow()
-            }}
-        )
-
-        updated_schedule = await schedules.find_one({"_id": ObjectId(schedule_id)})
-        schedule_model = ScheduleModel(**updated_schedule)
-        
-        # Update the calendar for this schedule
-        await update_calendar_after_schedule(schedule_model)
-        
-        return await get_schedule(schedule_id, user_id)
-    
-    
-    if pump_id is None:
-        raise ValueError("pump ID is required to generate the schedule")
-
     while completed_quantity < total_quantity:
         trip_no += 1
         selected_tm = None
@@ -672,57 +606,58 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
 
         trips.append(trip)
 
-    # Add an additional buffer trip
-    trip_no += 1
-    selected_tm = None
-    earliest_effective_site_arrival_for_best_tm = datetime.max 
+    # Add an additional buffer trip for pumping schedules
+    if schedule["type"] == "supply":
+        trip_no += 1
+        selected_tm = None
+        earliest_effective_site_arrival_for_best_tm = datetime.max 
 
-    target_site_arrival_for_current_trip = unloading_end + timedelta(minutes=1) if trip_no > 1 else pump_available_time
-    for tm in selected_tms:
-            # Calculate when TM becomes available after buffer time
-            min_tm_departure_time = tm_available_times[tm]
-            # Add buffer time to determine when TM is actually available for next trip
-            tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time)
-            potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time)
-            effective_site_arrival = max(target_site_arrival_for_current_trip, potential_tm_arrival_time)
+        target_site_arrival_for_current_trip = unloading_end + timedelta(minutes=1) if trip_no > 1 else pump_available_time
+        for tm in selected_tms:
+                # Calculate when TM becomes available after buffer time
+                min_tm_departure_time = tm_available_times[tm]
+                # Add buffer time to determine when TM is actually available for next trip
+                tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time)
+                potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time)
+                effective_site_arrival = max(target_site_arrival_for_current_trip, potential_tm_arrival_time)
 
-            if effective_site_arrival < earliest_effective_site_arrival_for_best_tm:
-                earliest_effective_site_arrival_for_best_tm = effective_site_arrival
-                selected_tm = tm
-            elif effective_site_arrival == earliest_effective_site_arrival_for_best_tm:
-                if selected_tm is None or tm_usage_count[tm] < tm_usage_count[selected_tm]:
+                if effective_site_arrival < earliest_effective_site_arrival_for_best_tm:
+                    earliest_effective_site_arrival_for_best_tm = effective_site_arrival
                     selected_tm = tm
+                elif effective_site_arrival == earliest_effective_site_arrival_for_best_tm:
+                    if selected_tm is None or tm_usage_count[tm] < tm_usage_count[selected_tm]:
+                        selected_tm = tm
 
-    tm_identifier = tm_map.get(selected_tm, selected_tm)
+        tm_identifier = tm_map.get(selected_tm, selected_tm)
 
-    pump_start = earliest_effective_site_arrival_for_best_tm
-    plant_start = pump_start - timedelta(minutes=onward_time)
-    unloading_end = pump_start + timedelta(minutes=buffer_time)
-    return_at = unloading_end + timedelta(minutes=return_time)
+        pump_start = earliest_effective_site_arrival_for_best_tm
+        plant_start = pump_start - timedelta(minutes=onward_time)
+        unloading_end = pump_start + timedelta(minutes=buffer_time)
+        return_at = unloading_end + timedelta(minutes=return_time)
 
-    # Update next available time to include buffer time
-    tm_available_times[selected_tm] = return_at
-    tm_usage_count[selected_tm] += 1
-    tm_trip_counter[selected_tm] += 1
+        # Update next available time to include buffer time
+        tm_available_times[selected_tm] = return_at
+        tm_usage_count[selected_tm] += 1
+        tm_trip_counter[selected_tm] += 1
 
-    # Calculate cycle_time (return_ - plant_start in seconds)
-    cycle_time = (return_at - plant_start).total_seconds()
-    trip_no_for_tm = tm_trip_counter[selected_tm]
+        # Calculate cycle_time (return_ - plant_start in seconds)
+        cycle_time = (return_at - plant_start).total_seconds()
+        trip_no_for_tm = tm_trip_counter[selected_tm]
 
-    # Use datetime objects directly
-    trip = Trip(
-        trip_no=trip_no,
-        tm_no=tm_identifier,
-        tm_id=selected_tm,
-        plant_start=plant_start,
-        pump_start=pump_start,
-        unloading_time=unloading_end,
-        return_=return_at,
-        completed_capacity=total_quantity,
-        cycle_time=cycle_time,
-        trip_no_for_tm=trip_no_for_tm
-    )
-    trips.append(trip)
+        # Use datetime objects directly
+        trip = Trip(
+            trip_no=trip_no,
+            tm_no=tm_identifier,
+            tm_id=selected_tm,
+            plant_start=plant_start,
+            pump_start=pump_start,
+            unloading_time=unloading_end,
+            return_=return_at,
+            completed_capacity=total_quantity,
+            cycle_time=cycle_time,
+            trip_no_for_tm=trip_no_for_tm
+        )
+        trips.append(trip)
     
     # Safely serialize the trips to ensure all datetimes are properly converted
     serialized_trips = safe_serialize([trip.model_dump(by_alias=True) for trip in trips])
