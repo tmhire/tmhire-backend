@@ -89,7 +89,7 @@ class ScheduleModel(BaseModel):
     output_table: Optional[List[Trip]] = Field(default_factory=list)
     tm_count: Optional[int] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
-    pumping_job: Optional[int] = None
+    pumping_job: Optional[str] = None
     floor_height: Optional[int] = None
     pump_site_reach_time: Optional[Union[datetime, str]] = None 
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
@@ -128,7 +128,7 @@ class ScheduleModel(BaseModel):
                 },
                 "tm_count": 6,
                 "concreteGrade": 25,
-                "pumping_job": 1,
+                "pumping_job": "Road",
                 "floor_height": 10,
                 "pump_site_reach_time": "2023-06-25T07:30:00",
                 "pumping_speed": 30,
@@ -165,7 +165,7 @@ class ScheduleCreate(BaseModel):
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
-    pumping_job: Optional[int] = None
+    pumping_job: Optional[str] = None
     floor_height: Optional[int] = None
     pump_site_reach_time: Union[datetime, str] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
@@ -182,7 +182,7 @@ class ScheduleCreate(BaseModel):
                 "pump_type": "boom",
                 "site_address": "Chennai Main Road Site",
                 "concreteGrade": 25,
-                "pumping_job": 1,
+                "pumping_job": "Road",
                 "floor_height": 10,
                 "pump_site_reach_time": "2023-06-25T07:30:00",
                 "pumping_speed": 30,
@@ -218,7 +218,7 @@ class ScheduleUpdate(BaseModel):
     pump_type: Optional[PumpType] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
-    pumping_job: Optional[int] = None
+    pumping_job: Optional[str] = None
     floor_height: Optional[int] = None
     pump_site_reach_time: Union[datetime, str] = None
     type: Optional[str] = "pumping"
@@ -247,7 +247,7 @@ class ScheduleUpdate(BaseModel):
                 "pump_type": "boom",
                 "pumping_speed": 35,
                 "concreteGrade": 30,
-                "pumping_job": 2,
+                "pumping_job": "Road",
                 "floor_height": 12,
                 "pump_site_reach_time": "2023-06-26T07:30:00",
                 "type": "supply"
