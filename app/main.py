@@ -40,7 +40,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://tmhire-frontend.vercel.app"], 
+    allow_origins=["http://localhost:3000","https://tmhire-frontend.vercel.app", "https://tmgrid.in"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
