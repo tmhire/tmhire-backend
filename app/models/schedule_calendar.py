@@ -60,8 +60,8 @@ class ScheduleCalendarQuery(BaseModel):
 class GanttTask(BaseModel):
     """Represents a task in the Gantt chart"""
     id: str
-    start: str # Start time in IST format
-    end: str  # End time in IST format
+    start: str | datetime # Start time in IST format
+    end: str | datetime # End time in IST format
     client: Optional[str] = None
 
 class GanttMixer(BaseModel):
@@ -92,4 +92,4 @@ class GanttResponse(BaseModel):
 
 class GanttRequest(BaseModel):
     """Body of the schedule_calendar/gantt endpoint"""
-    query_date: date
+    query_date: datetime | str

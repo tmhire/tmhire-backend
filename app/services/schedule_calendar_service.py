@@ -642,16 +642,21 @@ def _parse_datetime_with_timezone(dt_str: str) -> datetime:
 
     return dt
 
+def _is_between(v1, v2, v3):
+    return v1 <= v2 <= v3
+
 async def get_gantt_data(
-    query_date: date,
+    query_date_str: str,
     user_id: str
 ) -> GanttResponse:
     """Get calendar data in Gantt chart format with multiple segments per trip"""
+    query_date = datetime.fromisoformat(query_date_str).replace(tzinfo=timezone.utc)
     print(f"Getting Gantt data for date: {query_date}")
 
     # Define the start and end of the day in UTC
-    start_datetime = datetime.combine(query_date, time.min).replace(tzinfo=timezone.utc)
-    end_datetime = datetime.combine(query_date + timedelta(days=1), time.min).replace(tzinfo=timezone.utc)
+    start_datetime = query_date
+    end_datetime = query_date + timedelta(days=1)
+    print(start_datetime, end_datetime)
 
     # Find all schedules in the date range
     schedule_query = {
@@ -683,7 +688,7 @@ async def get_gantt_data(
     plant_map = {str(plant["_id"]): plant for plant in all_plants}
     
     # Get all TMs first
-    tm_map = {}
+    tm_map: GanttMixer = {}
     tm_count = 0
 
     for tm in all_tms:
@@ -714,8 +719,6 @@ async def get_gantt_data(
             type = pump_type,
             tasks=[]
         )
-        
-    query_date = _get_valid_date(query_date)
         
     schedule_count = 0
     task_count = 0
@@ -754,32 +757,32 @@ async def get_gantt_data(
                 return_time_dt = _parse_datetime_with_timezone(return_time) if isinstance(return_time, str) else return_time
                 # Only add segments if both times are present and on the query_date
                 # Onward
-                if plant_start_dt and pump_start_dt and plant_start_dt.date() == query_date and pump_start_dt.date() == query_date:
+                if plant_start_dt and pump_start_dt and (_is_between(start_datetime, plant_start_dt, end_datetime) or _is_between(start_datetime, pump_start_dt, end_datetime)):
                     task_id = f"onward-{schedule_id}-{tm_id}"
                     tm_map[tm_id].tasks.append(GanttTask(
                         id=task_id,
-                        start=plant_start_dt.strftime("%H:%M"),
-                        end=pump_start_dt.strftime("%H:%M"),
+                        start=plant_start_dt,
+                        end=pump_start_dt,
                         client=client_name
                     ))
                     task_count += 1
                 # Work
-                if pump_start_dt and unloading_time_dt and pump_start_dt.date() == query_date and unloading_time_dt.date() == query_date:
+                if pump_start_dt and unloading_time_dt and (_is_between(start_datetime, unloading_time_dt, end_datetime) or _is_between(start_datetime, pump_start_dt, end_datetime)):
                     task_id = f"work-{schedule_id}-{tm_id}"
                     tm_map[tm_id].tasks.append(GanttTask(
                         id=task_id,
-                        start=pump_start_dt.strftime("%H:%M"),
-                        end=unloading_time_dt.strftime("%H:%M"),
+                        start=pump_start_dt,
+                        end=unloading_time_dt,
                         client=client_name
                     ))
                     task_count += 1
                 # Return
-                if unloading_time_dt and return_time_dt and unloading_time_dt.date() == query_date and return_time_dt.date() == query_date:
+                if unloading_time_dt and return_time_dt and (_is_between(start_datetime, unloading_time_dt, end_datetime) or _is_between(start_datetime, return_time_dt, end_datetime)):
                     task_id = f"return-{schedule_id}-{tm_id}"
                     tm_map[tm_id].tasks.append(GanttTask(
                         id=task_id,
-                        start=unloading_time_dt.strftime("%H:%M"),
-                        end=return_time_dt.strftime("%H:%M"),
+                        start=unloading_time_dt,
+                        end=return_time_dt,
                         client=client_name
                     ))
                     task_count += 1
@@ -788,12 +791,12 @@ async def get_gantt_data(
                     next_trip = trips[i+1]
                     next_plant_start = next_trip.get("plant_start")
                     next_plant_start_dt = _parse_datetime_with_timezone(next_plant_start) if isinstance(next_plant_start, str) else next_plant_start
-                    if next_plant_start_dt and return_time_dt.date() == query_date and next_plant_start_dt.date() == query_date and next_plant_start_dt > return_time_dt:
+                    if next_plant_start_dt and (_is_between(start_datetime, next_plant_start_dt, end_datetime) or _is_between(start_datetime, return_time_dt, end_datetime)) and next_plant_start_dt > return_time_dt:
                         task_id = f"cushion-{schedule_id}-{tm_id}"
                         tm_map[tm_id].tasks.append(GanttTask(
                             id=task_id,
-                            start=return_time_dt.strftime("%H:%M"),
-                            end=next_plant_start_dt.strftime("%H:%M"),
+                            start=return_time_dt,
+                            end=next_plant_start_dt,
                             client=client_name
                         ))
                         task_count += 1
@@ -813,8 +816,8 @@ async def get_gantt_data(
         end_time = trips[-1].get("unloading_time")
         if not start_time or not end_time:
             continue
-        start_time = get_date_from_iso(start_time)
-        end_time = get_date_from_iso(end_time)
+        start_time = _parse_datetime_with_timezone(start_time)
+        end_time = _parse_datetime_with_timezone(end_time)
         if start_time == None or end_time == None:
             continue
         pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
@@ -824,16 +827,16 @@ async def get_gantt_data(
             # Add a task for the pump onward time
             task = GanttTask(
                 id=f"onward-{schedule_id}-{pump_id}",
-                start=(start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))).strftime("%H:%M"),
-                end=(start_time - timedelta(minutes=pump_fixing_time)).strftime("%H:%M"),
+                start=(start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))),
+                end=(start_time - timedelta(minutes=pump_fixing_time)),
                 client=client_name
             )
             pump_map[pump_id].tasks.append(task)
             
             task = GanttTask(
                 id=f"fixing-{schedule_id}-{pump_id}",
-                start=(start_time - timedelta(minutes=pump_fixing_time)).strftime("%H:%M"),
-                end=start_time.strftime("%H:%M"),
+                start=(start_time - timedelta(minutes=pump_fixing_time)),
+                end=start_time,
                 client=client_name
             )
             pump_map[pump_id].tasks.append(task)
@@ -841,8 +844,8 @@ async def get_gantt_data(
         
         task = GanttTask(
             id=f"work-{schedule_id}-{pump_id}",
-            start=start_time.strftime("%H:%M"),
-            end=end_time.strftime("%H:%M"),
+            start=start_time,
+            end=end_time,
             client=client_name
         )
         pump_map[pump_id].tasks.append(task)
@@ -850,8 +853,8 @@ async def get_gantt_data(
         if pump_removal_time > 0:
             task = GanttTask(
                 id=f"removal-{schedule_id}-{pump_id}",
-                start=end_time.strftime("%H:%M"),
-                end=(end_time + timedelta(minutes=pump_removal_time)).strftime("%H:%M"),
+                start=end_time,
+                end=(end_time + timedelta(minutes=pump_removal_time)),
                 client=client_name
             )
             pump_map[pump_id].tasks.append(task)
@@ -859,14 +862,13 @@ async def get_gantt_data(
         if pump_onward_time > 0:
             task = GanttTask(
                 id=f"return-{schedule_id}-{pump_id}",
-                start=(end_time + timedelta(minutes=pump_removal_time)).strftime("%H:%M"),
-                end=(end_time + timedelta(minutes=pump_removal_time + pump_onward_time)).strftime("%H:%M"),
+                start=(end_time + timedelta(minutes=pump_removal_time)),
+                end=(end_time + timedelta(minutes=pump_removal_time + pump_onward_time)),
                 client=client_name
             )
             pump_map[pump_id].tasks.append(task)
     
     print(f"Processed {schedule_count} schedules and created {task_count} tasks")
-    print(f"Pump Gantt data for {query_date} retrieved: {pump_map}")
     
     # Convert map to list
     return GanttResponse(mixers = list(tm_map.values()), pumps = list(pump_map.values())) 
