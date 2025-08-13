@@ -695,7 +695,7 @@ async def get_gantt_data(
         tm_count += 1
         tm_id = str(tm["_id"])
         plant = plant_map.get(str(tm.get("plant_id", "")), None)
-        plant_name = getattr(plant, "name", "Unknown Plant")
+        plant_name = plant.get("name", "Unknown Plant")
         tm_map[tm_id] = GanttMixer(
             id=tm_id,
             name=tm.get("identifier", "Unknown"),
