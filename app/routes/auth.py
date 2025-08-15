@@ -1,3 +1,4 @@
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.user import UserLogin, UserModel, UserCreate, UserUpdate
 from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, refreshing_access_token, update_user_data, validate_google_token, verify_password
@@ -55,6 +56,8 @@ class User(BaseModel):
     company: str | None
     city: str | None
     contact: int | None
+    preferred_format: Literal["12h", "24h"]
+    custom_start_hour: float
     access_token: str
     refresh_token: str
     token_type: str
@@ -97,6 +100,8 @@ async def signup(user_data: UserCreate):
                 "company": user.company,
                 "city": user.city,
                 "contact": user.contact,
+                "preferred_format": user.preferred_format,
+                "custom_start_hour": user.custom_start_hour,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
@@ -139,6 +144,8 @@ async def login_user(user_data: UserLogin):
                 "company": user.company,
                 "city": user.city,
                 "contact": user.contact,
+                "preferred_format": user.preferred_format,
+                "custom_start_hour": user.custom_start_hour,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
@@ -204,6 +211,8 @@ async def login_google(token_data: GoogleToken):
             "company": user.company,
             "city": user.city,
             "contact": user.contact,
+            "preferred_format": user.preferred_format,
+            "custom_start_hour": user.custom_start_hour,
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer"

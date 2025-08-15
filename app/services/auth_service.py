@@ -66,18 +66,21 @@ async def update_user_data(user_id: str, user: UserUpdate):
     if "password" in user_data and user_data["password"]:
         user_data["password"] = hash_password(user_data["password"])
 
+    existing_user = (await get_user(user_id)).model_dump()
     isNewUser = True
     if all(
-        key in user_data and user_data[key] is not None
+        key in existing_user and existing_user[key] is not None
         for key in ["contact", "company", "city"]
     ):
         isNewUser = False
     user_data["new_user"] = isNewUser
 
+    updated_user = {**existing_user, **user_data}
+
     #Update user
     await users.update_one(
         {"_id": ObjectId(user_id)},
-        {"$set": user_data}
+        {"$set": updated_user}
     )
     
     return await get_user(user_id)

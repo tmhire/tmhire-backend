@@ -14,7 +14,7 @@ class UserModel(BaseModel):
     company: Optional[str] = Field(default=None, description="Company that the user works for")
     city: Optional[str] = Field(default=None, description="Location of the user")
     preferred_format: Optional[Literal["12h", "24h"]] = "24h"
-    custom_start_hour: Optional[int] = 0
+    custom_start_hour: Optional[float] = 0.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -30,7 +30,7 @@ class UserModel(BaseModel):
                 "company": "Main Concrete Firm",
                 "city": "Coimbatore",
                 "preferred_format": "24h",
-                "custom_start_hour": 0,
+                "custom_start_hour": 0.0,
                 "created_at": datetime.utcnow()
             }
         }
@@ -45,7 +45,7 @@ class UserCreate(BaseModel):
     company: Optional[str] = Field(default=None, description="Company that the user works for")
     city: Optional[str] = Field(default=None, description="Location of the user")
     preferred_format: Optional[Literal["12h", "24h"]] = "24h"
-    custom_start_hour: Optional[int] = 0
+    custom_start_hour: Optional[float] = 0.0
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -58,7 +58,7 @@ class UserCreate(BaseModel):
                 "company": "Main Concrete Firm",
                 "city": "Coimbatore",
                 "preferred_format": "24h",
-                "custom_start_hour": 0,
+                "custom_start_hour": 0.0,
             }
         }
     ) 
@@ -74,7 +74,7 @@ class UserUpdate(BaseModel):
     company: Optional[str] = None
     city: Optional[str] = None
     preferred_format: Optional[Literal["12h", "24h"]] = "24h"
-    custom_start_hour: Optional[int] = 0
+    custom_start_hour: Optional[float] = 0.0
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -85,7 +85,7 @@ class UserUpdate(BaseModel):
                 "company": "Main Concrete Firm",
                 "city": "Coimbatore",
                 "preferred_format": "24h",
-                "custom_start_hour": 0,
+                "custom_start_hour": 0.0,
             }
         }
     ) 

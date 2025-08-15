@@ -677,7 +677,7 @@ async def get_gantt_data(
         }
     ]
     }
-    
+    print(user_id)
     all_tms, all_pumps, queried_schedules, all_plants = await asyncio.gather(
         transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
         pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
@@ -720,6 +720,7 @@ async def get_gantt_data(
             tasks=[]
         )
         
+    print("All tm and pumps: ", tm_map, pump_map)
     schedule_count = 0
     task_count = 0
     for schedule in queried_schedules:
@@ -727,7 +728,9 @@ async def get_gantt_data(
         
         client_name = schedule.get("client_name")
         schedule_id = str(schedule["_id"])
-        
+
+        buffer_time = schedule.get("input_params", {}).get("buffer_time", 0)
+
         # Group trips by tm_id for this schedule
         trips_by_tm = {}
         for trip in schedule.get("output_table", []):
@@ -749,10 +752,12 @@ async def get_gantt_data(
                 # Parse all relevant datetimes
                 plant_start = trip.get("plant_start")
                 pump_start = trip.get("pump_start")
+                # unloading_buffer = pump_start + timedelta(minutes=buffer_time) if pump_start else None
                 unloading_time = trip.get("unloading_time")
                 return_time = trip.get("return")
                 plant_start_dt = _parse_datetime_with_timezone(plant_start) if isinstance(plant_start, str) else plant_start
                 pump_start_dt = _parse_datetime_with_timezone(pump_start) if isinstance(pump_start, str) else pump_start
+                unloading_buffer_dt = pump_start_dt + timedelta(minutes=buffer_time) if pump_start_dt else None
                 unloading_time_dt = _parse_datetime_with_timezone(unloading_time) if isinstance(unloading_time, str) else unloading_time
                 return_time_dt = _parse_datetime_with_timezone(return_time) if isinstance(return_time, str) else return_time
                 # Only add segments if both times are present and on the query_date
@@ -766,12 +771,22 @@ async def get_gantt_data(
                         client=client_name
                     ))
                     task_count += 1
-                # Work
-                if pump_start_dt and unloading_time_dt and (_is_between(start_datetime, unloading_time_dt, end_datetime) or _is_between(start_datetime, pump_start_dt, end_datetime)):
-                    task_id = f"work-{schedule_id}-{tm_id}"
+                # Buffer
+                if pump_start_dt and unloading_buffer_dt and (_is_between(start_datetime, unloading_buffer_dt, end_datetime) or _is_between(start_datetime, pump_start_dt, end_datetime)):
+                    task_id = f"buffer-{schedule_id}-{tm_id}"
                     tm_map[tm_id].tasks.append(GanttTask(
                         id=task_id,
                         start=pump_start_dt,
+                        end=unloading_buffer_dt,
+                        client=client_name
+                    ))
+                    task_count += 1
+                # Work
+                if unloading_buffer_dt and unloading_time_dt and (_is_between(start_datetime, unloading_time_dt, end_datetime) or _is_between(start_datetime, unloading_buffer_dt, end_datetime)):
+                    task_id = f"work-{schedule_id}-{tm_id}"
+                    tm_map[tm_id].tasks.append(GanttTask(
+                        id=task_id,
+                        start=unloading_buffer_dt,
                         end=unloading_time_dt,
                         client=client_name
                     ))

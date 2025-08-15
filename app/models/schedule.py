@@ -34,6 +34,7 @@ class Trip(BaseModel):
     tm_id: str
     plant_start: Union[datetime, str]
     pump_start: Union[datetime, str]
+    unloading_buffer: Optional[Union[datetime, str]] = None
     unloading_time: Union[datetime, str]
     return_: Union[datetime, str] = Field(..., alias="return")
     completed_capacity: float = 0
