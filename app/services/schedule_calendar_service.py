@@ -711,7 +711,7 @@ async def get_gantt_data(
         pump_id = str(pump["_id"])
         pump_type = pump.get("type")
         plant = plant_map.get(str(pump.get("plant_id", "")), None)
-        plant_name = getattr(plant, "name", "Unknown Plant")
+        plant_name = plant.get("name", "Unknown Plant")
         pump_map[pump_id] = GanttPump(
             id=pump_id,
             name=pump.get("identifier", "Unknown"),
