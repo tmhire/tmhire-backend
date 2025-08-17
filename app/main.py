@@ -27,7 +27,7 @@ class CustomJSONResponse(JSONResponse):
         ).encode("utf-8")
 
 # Import routes
-from app.routes import projects, pumps, tms, schedules, auth, plants, schedule_calendar, clients, dashboard
+from app.routes import projects, pumps, tms, schedules, auth, plants, schedule_calendar, clients, dashboard, team_members
 
 # Create FastAPI app
 app = FastAPI(
@@ -97,6 +97,7 @@ app.include_router(schedule_calendar.router, prefix="/calendar", tags=["Schedule
 
 app.include_router(clients.router, prefix="/clients", tags=["Clients"])
 app.include_router(projects.router, prefix="/projects", tags=["Projects"])
+app.include_router(team_members.router, prefix="/team", tags=["Team Members"])
 
 @app.get("/")
 async def root():

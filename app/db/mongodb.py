@@ -26,6 +26,7 @@ schedule_calendar = database.schedule_calendar
 clients = database.clients
 projects = database.projects
 pumps = database.pumps
+team = database.team
 
 # Helper class for converting between MongoID and string
 class PyObjectId(ObjectId):
