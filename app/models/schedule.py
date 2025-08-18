@@ -79,6 +79,7 @@ class ScheduleModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: PyObjectId
     project_id: Optional[PyObjectId] = None  # Now always required
+    project_name: Optional[str] = "Unknown Project"
     client_id: PyObjectId   # Now always required
     client_name: str
     pump: Optional[PyObjectId | str] = None
@@ -94,6 +95,7 @@ class ScheduleModel(BaseModel):
     floor_height: Optional[int] = None
     pump_site_reach_time: Optional[Union[datetime, str]] = None 
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
+    tm_overrule: Optional[int] = 1
     pumping_time: Optional[float] = None
     status: str = "draft"  # draft, generated, finalized, completed, cancelled
     type: Optional[ScheduleType] = "pumping"
@@ -173,6 +175,7 @@ class ScheduleCreate(BaseModel):
     pumping_time: Optional[float] = None
     input_params: InputParams
     type: Optional[str] = "pumping"
+    tm_overrule: Optional[int] = 1
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -200,7 +203,8 @@ class ScheduleCreate(BaseModel):
                     "pump_start": "2023-06-25T08:00:00",
                     "schedule_date": "2023-06-25"
                 },
-                "type": "supply"
+                "type": "supply",
+                "tm_overrule": 1
             }
         }
     )
@@ -223,6 +227,7 @@ class ScheduleUpdate(BaseModel):
     floor_height: Optional[int] = None
     pump_site_reach_time: Union[datetime, str] = None
     type: Optional[str] = "pumping"
+    tm_overrule: Optional[int] = 1
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -251,7 +256,9 @@ class ScheduleUpdate(BaseModel):
                 "pumping_job": "Road",
                 "floor_height": 12,
                 "pump_site_reach_time": "2023-06-26T07:30:00",
-                "type": "supply"
+                "type": "supply",
+                "tm_overrule": 1
+
             }
         }
     ) 

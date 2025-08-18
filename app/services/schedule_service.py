@@ -2,6 +2,7 @@ from pymongo import DESCENDING
 from app.db.mongodb import schedules, transit_mixers
 from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip
 from app.services.plant_service import get_plant
+from app.services.project_service import get_project
 from app.services.pump_service import get_all_pumps
 from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
@@ -76,7 +77,13 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                 if tm_id and tm_id in tm_map:
                     trip["tm_no"] = tm_map[tm_id]["identifier"]
                     trip["plant_name"] = tm_map[tm_id]["plant_name"]
-        
+
+        # Add project name to the schedule's response
+        project = await get_project(schedule.get("project_id", None), user_id)
+        print(project)
+        if project:
+            schedule["project_name"] = project.model_dump().get("name", "Unknown Project")
+
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
         for trip in schedule.get("output_table", []):
@@ -142,7 +149,8 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
             trip["trip_no_for_tm"] = tm_trip[tm_id]["trip_count"]
 
         input_params = InputParams(**schedule["input_params"])
-        tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params)
+        tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params, tm_overrule=schedule.get("tm_overrule", None))
+        del schedule["tm_overrule"]
         tm_suggestion.pop("tm_count", None)
         available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["schedule_date"])
         pump_type = schedule.get("pump_type")
@@ -231,7 +239,7 @@ def get_unloading_time(capacity: float) -> int:
         rounded_capacity = 10
     return UNLOADING_TIME_LOOKUP[rounded_capacity]
 
-async def calculate_tm_suggestions(user_id: str, input_params: InputParams) -> Dict:
+async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_overrule: int = None) -> Dict:
     avg_capacity = await get_average_capacity(user_id)
     if avg_capacity == 0:
         raise ValueError("Cannot calculate TM count, average capacity is 0. Add TMs first.")
@@ -267,7 +275,8 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams) -> D
         "total_trips": total_trips,
         "trips_per_tm": base_trips_per_tm,
         "remaining_trips": remaining_trips,
-        "cycle_time": cycle_time
+        "cycle_time": cycle_time,
+        "tm_overrule": tm_overrule if tm_overrule is not None else tm_count
     }
 
 async def _get_tm_ids_and_pump_ids_by_schedule_date(target_date: date, user_id: str) -> set[str]:
