@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.team import TeamMemberModel, TeamMemberCreate, TeamMemberUpdate
 from app.models.user import UserModel
 from app.services.team_service import (
-    get_all_teams, get_team_member, create_team_member, update_team_member, delete_team_member
+    get_all_teams, get_team_member, create_team_member, update_team_member, delete_team_member, get_team_group
 )
 from app.services.auth_service import get_current_user
-from typing import List
+from typing import List, Literal
 from app.schemas.response import StandardResponse
 
 router = APIRouter(tags=["Team Members"])
@@ -86,4 +86,14 @@ async def delete_team(
         success=True,
         message=result.get("message", "Team member deleted successfully"),
         data=None
+    )
+
+@router.get("/group/{group}", response_model=StandardResponse[List[TeamMemberModel]])
+async def read_group_team(group: Literal["client", "pump", "schedule"], current_user: UserModel = Depends(get_current_user)):
+    """Get all team members in a group for the current user"""
+    teams = await get_team_group(group, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Team members retrieved successfully",
+        data=teams
     )

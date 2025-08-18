@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.project import ProjectModel, ProjectCreate, ProjectUpdate
 from app.models.user import UserModel
 from app.services.project_service import (
-    get_all_projects, get_project, create_project, update_project, delete_project, get_project_schedules, get_project_stats
+    get_all_projects, get_project, create_project, update_project, delete_project, 
+    get_project_schedules, get_project_stats, get_all_projects_for_mother_plant,
+    migrate_projects_with_mother_plant, get_projects_without_mother_plant
 )
 from app.services.auth_service import get_current_user
 from typing import List, Dict, Any
@@ -168,4 +170,60 @@ async def read_project_stats(
         success=True,
         message="Project statistics retrieved successfully",
         data=stats
+    ) 
+
+@router.get("/mother-plant/{mother_plant_id}", response_model=StandardResponse[List[ProjectModel]])
+async def read_projects_by_mother_plant(
+    mother_plant_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Retrieve all projects for a specific mother plant.
+    
+    Path parameter:
+    - mother_plant_id: The ID of the mother plant
+    
+    Returns a list of all projects associated with the specified mother plant.
+    """
+    projects = await get_all_projects_for_mother_plant(str(current_user.id), mother_plant_id)
+    return StandardResponse(
+        success=True,
+        message="Projects for mother plant retrieved successfully",
+        data=projects
+    )
+
+@router.get("/without-mother-plant", response_model=StandardResponse[List[ProjectModel]])
+async def read_projects_without_mother_plant(
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Retrieve all projects that don't have a mother plant assigned.
+    
+    Returns a list of all projects without a mother plant.
+    """
+    projects = await get_projects_without_mother_plant(str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Projects without mother plant retrieved successfully",
+        data=projects
+    )
+
+@router.post("/migrate/{mother_plant_id}", response_model=StandardResponse[Dict[str, Any]])
+async def migrate_projects_to_mother_plant(
+    mother_plant_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Migrate all projects without a mother plant to assign the specified mother plant.
+    
+    Path parameter:
+    - mother_plant_id: The ID of the mother plant to assign
+    
+    Returns migration results.
+    """
+    result = await migrate_projects_with_mother_plant(str(current_user.id), mother_plant_id)
+    return StandardResponse(
+        success=True,
+        message=result["message"],
+        data=result
     ) 

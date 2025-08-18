@@ -1,7 +1,13 @@
 from app.db.mongodb import team
 from app.models.team import TeamMemberModel, TeamMemberCreate, TeamMemberUpdate
 from bson import ObjectId
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
+
+groupSet = {
+    "client": ["sales-engineer"],
+    "pump": ["pump-operator", "pipeline-gang"],
+    "schedule": ["site-supervisor"]
+}
 
 async def get_all_teams(user_id: str) -> List[TeamMemberModel]:
     """Get all team members for a user"""
@@ -16,6 +22,16 @@ async def get_team_member(id: str, user_id: str) -> Optional[TeamMemberModel]:
     if member:
         return TeamMemberModel(**member)
     return None
+
+async def get_team_group(group: Literal["client", "pump", "schedule"], user_id: str) -> List[TeamMemberModel]:
+    "Get all team members in a specific group for a user"
+    team_list = []
+    async for member in team.find({
+        "user_id": ObjectId(user_id),
+        "designation": {"$in": groupSet[group]}
+    }):
+        team_list.append(TeamMemberModel(**member))
+    return team_list
 
 async def create_team_member(member: TeamMemberCreate, user_id: str) -> TeamMemberModel:
     """Create a new team member"""

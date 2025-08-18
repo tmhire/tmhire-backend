@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 from bson import ObjectId
 from datetime import datetime
 from app.services.client_service import get_client
+from app.services.plant_service import get_plant
 
 async def get_all_projects(user_id: str) -> List[ProjectModel]:
     """Get all projects for a user"""
@@ -25,9 +26,17 @@ async def create_project(project: ProjectCreate, user_id: str) -> ProjectModel:
     """Create a new project"""
     project_data = project.model_dump()
     project_data["user_id"] = ObjectId(user_id)
+    
+    # Validate client exists
     client = await get_client(str(project.client_id), user_id)
     if client is None:
         raise ValueError("Client ID does not exist")
+    
+    # Validate mother plant exists
+    mother_plant = await get_plant(str(project.mother_plant_id), user_id)
+    if mother_plant is None:
+        raise ValueError("Mother Plant ID does not exist")
+    
     project_data["created_at"] = datetime.utcnow()
     project_data["last_updated"] = datetime.utcnow()
     
@@ -42,6 +51,18 @@ async def update_project(id: str, project: ProjectUpdate, user_id: str) -> Optio
     
     if not project_data:
         return await get_project(id, user_id)
+    
+    # Validate client exists if being updated
+    if "client_id" in project_data:
+        client = await get_client(str(project_data["client_id"]), user_id)
+        if client is None:
+            raise ValueError("Client ID does not exist")
+    
+    # Validate mother plant exists if being updated
+    if "mother_plant_id" in project_data:
+        mother_plant = await get_plant(str(project_data["mother_plant_id"]), user_id)
+        if mother_plant is None:
+            raise ValueError("Mother Plant ID does not exist")
     
     project_data["last_updated"] = datetime.utcnow()
     
@@ -81,6 +102,13 @@ async def get_all_projects_for_client(user_id: str, client_id: str) -> List[Proj
     "Get all projects for a user's client"
     project_list = []
     async for project in projects.find({"client_id": ObjectId(client_id), "user_id": ObjectId(user_id)}):
+        project_list.append(ProjectModel(**project))
+    return project_list
+
+async def get_all_projects_for_mother_plant(user_id: str, mother_plant_id: str) -> List[ProjectModel]:
+    "Get all projects for a user's mother plant"
+    project_list = []
+    async for project in projects.find({"mother_plant_id": ObjectId(mother_plant_id), "user_id": ObjectId(user_id)}):
         project_list.append(ProjectModel(**project))
     return project_list
 
@@ -128,6 +156,12 @@ async def get_project_stats(id: str, user_id: str) -> Dict[str, Any]:
     all_schedules = project_schedule_list["schedules"]
     if not project:
         return {}
+    
+    # Get mother plant information
+    mother_plant_name = "Not Assigned"
+    if project.get("mother_plant_id"):
+        mother_plant = await get_plant(str(project["mother_plant_id"]), user_id)
+        mother_plant_name = mother_plant.name if mother_plant else "Unknown Plant"
     
     # Initialize stats
     total_scheduled = 0
@@ -199,6 +233,7 @@ async def get_project_stats(id: str, user_id: str) -> Dict[str, Any]:
     
     return {
         "client_id": client_name,
+        "mother_plant": mother_plant_name,
         "total_scheduled": f"{total_scheduled} m³",
         "total_delivered": f"{total_delivered} m³",
         "pending_volume": f"{pending_volume} m³",
@@ -213,4 +248,39 @@ async def get_tm_identifier(tm_id: str, user_id: str) -> str:
     tm = await transit_mixers.find_one({"_id": ObjectId(tm_id), "user_id": ObjectId(user_id)})
     if tm:
         return tm.get("identifier", tm_id)
-    return tm_id 
+    return tm_id
+
+async def migrate_projects_with_mother_plant(user_id: str, mother_plant_id: str) -> Dict[str, Any]:
+    """Migrate existing projects to assign a mother plant"""
+    # Find all projects without mother_plant_id
+    result = await projects.update_many(
+        {
+            "user_id": ObjectId(user_id),
+            "mother_plant_id": {"$exists": False}
+        },
+        {
+            "$set": {
+                "mother_plant_id": ObjectId(mother_plant_id),
+                "last_updated": datetime.utcnow()
+            }
+        }
+    )
+    
+    return {
+        "success": True,
+        "message": f"Updated {result.modified_count} projects with mother plant",
+        "modified_count": result.modified_count
+    }
+
+async def get_projects_without_mother_plant(user_id: str) -> List[ProjectModel]:
+    """Get all projects that don't have a mother plant assigned"""
+    project_list = []
+    async for project in projects.find({
+        "user_id": ObjectId(user_id),
+        "$or": [
+            {"mother_plant_id": {"$exists": False}},
+            {"mother_plant_id": None}
+        ]
+    }):
+        project_list.append(ProjectModel(**project))
+    return project_list 

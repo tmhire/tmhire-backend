@@ -8,6 +8,7 @@ class ProjectModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: PyObjectId
     client_id: PyObjectId
+    mother_plant_id: Optional[PyObjectId] = None
     name: str
     address: Optional[str] = None
     coordinates: Optional[str] = None
@@ -24,6 +25,7 @@ class ProjectModel(BaseModel):
         json_schema_extra={
             "example": {
                 "client_id": "688872706e3053d0211f0015",
+                "mother_plant_id": "688872706e3053d0211f0016",
                 "name": "John Doe Construction Project",
                 "address": "123 Main Street, City",
                 "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
@@ -36,6 +38,7 @@ class ProjectModel(BaseModel):
 
 class ProjectCreate(BaseModel):
     client_id: PyObjectId
+    mother_plant_id: PyObjectId
     name: str
     address: Optional[str] = None
     coordinates: Optional[str] = None
@@ -47,6 +50,7 @@ class ProjectCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "client_id": "688872706e3053d0211f0015",
+                "mother_plant_id": "688872706e3053d0211f0016",
                 "name": "John Doe Construction Project",
                 "address": "123 Main Street, City",
                 "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
@@ -58,8 +62,9 @@ class ProjectCreate(BaseModel):
     )
 
 class ProjectUpdate(BaseModel):
-    client_id: PyObjectId
-    name: str
+    client_id: Optional[PyObjectId] = None
+    mother_plant_id: Optional[PyObjectId] = None
+    name: Optional[str] = None
     address: Optional[str] = None
     coordinates: Optional[str] = None
     contact_name: Optional[str] = None
@@ -70,6 +75,7 @@ class ProjectUpdate(BaseModel):
         json_schema_extra={
             "example": {
                 "client_id": "688872706e3053d0211f0015",
+                "mother_plant_id": "688872706e3053d0211f0016",
                 "name": "John Doe Construction Project",
                 "address": "123 Main Street, City",
                 "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
