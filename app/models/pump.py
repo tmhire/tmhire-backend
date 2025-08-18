@@ -15,6 +15,8 @@ class PumpModel(BaseModel):
     make: Optional[str] = None
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
+    pump_operator_id: Optional[PyObjectId | str] = None
+    pipeline_gang_id: Optional[PyObjectId | str] = None
     remarks: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -33,6 +35,8 @@ class PumpModel(BaseModel):
                 "make": "Ashok Leyland",
                 "driver_name": "John Doe",
                 "driver_contact": "+1234567890",
+                "pump_operator_id": "60d5ec9af682fcd81a060e74",
+                "pipeline_gang_id": "60d5ec9af682fcd81a060e75",
                 "remarks": "Ready for operation",
                 "created_at": datetime.utcnow()
             }
@@ -48,6 +52,8 @@ class PumpCreate(BaseModel):
     make: str
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
+    pump_operator_id: Optional[PyObjectId | str] = None
+    pipeline_gang_id: Optional[PyObjectId | str] = None
     remarks: Optional[str] = None
 
     model_config = ConfigDict(
@@ -60,6 +66,8 @@ class PumpCreate(BaseModel):
                 "status": "active",
                 "driver_name": "John Doe",
                 "driver_contact": "+1234567890",
+                "pump_operator_id": "60d5ec9af682fcd81a060e74",
+                "pipeline_gang_id": "60d5ec9af682fcd81a060e75",
                 "remarks": "Ready for operation",
                 "make": "Ashok Leyland"
             }
@@ -75,6 +83,8 @@ class PumpUpdate(BaseModel):
     make: Optional[str] = None
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
+    pump_operator_id: Optional[PyObjectId | str] = None
+    pipeline_gang_id: Optional[PyObjectId | str] = None
     remarks: Optional[str] = None
 
     model_config = ConfigDict(
@@ -87,6 +97,8 @@ class PumpUpdate(BaseModel):
                 "status": "inactive",
                 "driver_name": "John Doe",
                 "driver_contact": "+1234567890",
+                "pump_operator_id": "60d5ec9af682fcd81a060e74",
+                "pipeline_gang_id": "60d5ec9af682fcd81a060e75",
                 "remarks": "Ready for operation",
                 "make": "Ashok Leyland"
             }

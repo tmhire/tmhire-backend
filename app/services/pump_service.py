@@ -1,3 +1,4 @@
+import asyncio
 from app.db.mongodb import pumps, schedules
 from app.models.pump import PumpModel, PumpCreate, PumpUpdate
 from bson import ObjectId
@@ -5,6 +6,7 @@ from typing import List, Optional
 from datetime import datetime, time, timedelta
 from app.models.schedule_calendar import GanttPump, GanttTask
 from app.services.plant_service import get_plant
+from app.services.team_service import get_team_member
 
 async def get_all_pumps(user_id: str) -> List[PumpModel]:
     """Get all pumps for a user"""
@@ -31,6 +33,18 @@ async def create_pump(pump: PumpCreate, user_id: str) -> PumpModel:
     pump_data["user_id"] = ObjectId(user_id)
     if "plant_id" in pump_data and pump_data["plant_id"]:
         pump_data["plant_id"] = ObjectId(pump_data["plant_id"])
+
+    
+    # Validate pump operator exists
+    pump_operator, pipeline_gang = await asyncio.gather(
+        get_team_member(str(pump_data["pump_operator_id"]), user_id), 
+        get_team_member(str(pump_data["pipeline_gang_id"]), user_id)
+    )
+    if pump_operator is None:
+        raise ValueError("Pump Operator ID does not exist")
+    if pipeline_gang is None:
+        raise ValueError("Pipeline Gang ID does not exist")
+
     pump_data["created_at"] = datetime.utcnow()
     result = await pumps.insert_one(pump_data)
     new_pump = await pumps.find_one({"_id": result.inserted_id})
@@ -43,6 +57,17 @@ async def update_pump(id: str, pump: PumpUpdate, user_id: str) -> Optional[PumpM
         pump_data["plant_id"] = ObjectId(pump_data["plant_id"])
     if not pump_data:
         return await get_pump(id, user_id)
+
+    # Validate pump operator exists
+    pump_operator, pipeline_gang = await asyncio.gather(
+        get_team_member(str(pump_data["pump_operator_id"]), user_id), 
+        get_team_member(str(pump_data["pipeline_gang_id"]), user_id)
+    )
+    if pump_operator is None:
+        raise ValueError("Pump Operator ID does not exist")
+    if pipeline_gang is None:
+        raise ValueError("Pipeline Gang ID does not exist")
+
     await pumps.update_one(
         {"_id": ObjectId(id), "user_id": ObjectId(user_id)},
         {"$set": pump_data}
