@@ -5,6 +5,7 @@ from bson import ObjectId
 from datetime import datetime
 from app.services.client_service import get_client
 from app.services.plant_service import get_plant
+from app.services.team_service import get_team_member
 
 async def get_all_projects(user_id: str) -> List[ProjectModel]:
     """Get all projects for a user"""
@@ -36,6 +37,11 @@ async def create_project(project: ProjectCreate, user_id: str) -> ProjectModel:
     mother_plant = await get_plant(str(project.mother_plant_id), user_id)
     if mother_plant is None:
         raise ValueError("Mother Plant ID does not exist")
+
+    # Validate sales engineer exists
+    sales_engineer = await get_team_member(str(project.sales_engineer_id), user_id)
+    if sales_engineer is None:
+        raise ValueError("Sales Engineer ID does not exist")
     
     project_data["created_at"] = datetime.utcnow()
     project_data["last_updated"] = datetime.utcnow()
@@ -63,6 +69,11 @@ async def update_project(id: str, project: ProjectUpdate, user_id: str) -> Optio
         mother_plant = await get_plant(str(project_data["mother_plant_id"]), user_id)
         if mother_plant is None:
             raise ValueError("Mother Plant ID does not exist")
+    
+    # Validate sales engineer exists
+    sales_engineer = await get_team_member(str(project.sales_engineer_id), user_id)
+    if sales_engineer is None:
+        raise ValueError("Sales Engineer ID does not exist")
     
     project_data["last_updated"] = datetime.utcnow()
     
