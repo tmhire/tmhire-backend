@@ -4,6 +4,7 @@ from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel,
 from app.services.plant_service import get_plant
 from app.services.project_service import get_project
 from app.services.pump_service import get_all_pumps
+from app.services.team_service import get_team_member
 from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
 from datetime import datetime, timedelta, date, time
@@ -78,11 +79,20 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                     trip["tm_no"] = tm_map[tm_id]["identifier"]
                     trip["plant_name"] = tm_map[tm_id]["plant_name"]
 
-        # Add project name to the schedule's response
+        # Add project name and mother plant name to the schedule's response
         project = await get_project(schedule.get("project_id", None), user_id)
-        print(project)
         if project:
             schedule["project_name"] = project.model_dump().get("name", "Unknown Project")
+            mother_plant_id = project.model_dump().get("mother_plant_id", None)
+            mother_plant = (await get_plant(mother_plant_id, user_id))
+            if mother_plant:
+                schedule["mother_plant_name"] = mother_plant.model_dump().get("name", "Unknown Plant")
+
+
+        # Add site supervisor name to the schedule's response
+        supervisor = await get_team_member(schedule.get("site_supervisor_id", None), user_id)
+        if supervisor:
+            schedule["site_supervisor_name"] = supervisor.model_dump().get("name", "Unknown Supervisor")
 
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
@@ -150,7 +160,8 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
 
         input_params = InputParams(**schedule["input_params"])
         tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params, tm_overrule=schedule.get("tm_overrule", None))
-        del schedule["tm_overrule"]
+        if schedule.get("tm_overrule", None):
+            del schedule["tm_overrule"]
         tm_suggestion.pop("tm_count", None)
         available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["schedule_date"])
         pump_type = schedule.get("pump_type")

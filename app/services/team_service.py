@@ -18,6 +18,8 @@ async def get_all_teams(user_id: str) -> List[TeamMemberModel]:
 
 async def get_team_member(id: str, user_id: str) -> Optional[TeamMemberModel]:
     """Get a specific team member by ID"""
+    if id is None:
+        return None
     member = await team.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
     if member:
         return TeamMemberModel(**member)

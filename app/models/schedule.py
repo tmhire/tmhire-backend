@@ -83,6 +83,9 @@ class ScheduleModel(BaseModel):
     project_name: Optional[str] = "Unknown Project"
     client_id: PyObjectId   # Now always required
     client_name: str
+    site_supervisor_id: Optional[PyObjectId] = None
+    site_supervisor_name: Optional[str] = None
+    mother_plant_name: Optional[str] = "Unknown Plant"
     pump: Optional[PyObjectId | str] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
@@ -94,6 +97,8 @@ class ScheduleModel(BaseModel):
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     floor_height: Optional[int] = None
+    slump_at_site: Optional[float] = 0.0
+    mother_plant_km: Optional[float] = 0.0
     pump_site_reach_time: Optional[Union[datetime, str]] = None 
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     tm_overrule: Optional[int] = 1
@@ -116,6 +121,8 @@ class ScheduleModel(BaseModel):
                 "project_id": "60d5ec9af682fcd81a060e78",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
+                "site_supervisor_id": "60d5ec9af682fcd81a060e74",
+                "site_supervisor_name": "John Doe",
                 "pump": "60d5ec9af682fcd81a060e73",
                 "pump_type": "boom",
                 "site_address": "Chennai Main Road Site",
@@ -135,6 +142,8 @@ class ScheduleModel(BaseModel):
                 "concreteGrade": 25,
                 "pumping_job": "Road",
                 "floor_height": 10,
+                "slump_at_site": 0.0,
+                "mother_plant_km": 0.0,
                 "pump_site_reach_time": "2023-06-25T07:30:00",
                 "pumping_speed": 30,
                 "pumping_time": 2.0,
@@ -167,12 +176,16 @@ class ScheduleCreate(BaseModel):
     client_id: str  # Now required
     client_name: Optional[str] = None
     schedule_name: Optional[str] = "Unknown Schedule"
+    site_supervisor_id: Optional[PyObjectId] = None
+    site_supervisor_name: Optional[str] = None
     # pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     floor_height: Optional[int] = None
+    slump_at_site: Optional[float] = 0.0
+    mother_plant_km: Optional[float] = 0.0
     pump_site_reach_time: Union[datetime, str] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     pumping_time: Optional[float] = None
@@ -187,11 +200,15 @@ class ScheduleCreate(BaseModel):
                 "schedule_name": "ABC - Road 1",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
+                "site_supervisor_id": "60d5ec9af682fcd81a060e74",
+                "site_supervisor_name": "John Doe",
                 "pump_type": "boom",
                 "site_address": "Chennai Main Road Site",
                 "concreteGrade": 25,
                 "pumping_job": "Road",
                 "floor_height": 10,
+                "slump_at_site": 0.0,
+                "mother_plant_km": 0.0,
                 "pump_site_reach_time": "2023-06-25T07:30:00",
                 "pumping_speed": 30,
                 "pumping_time": 2.0,
@@ -221,6 +238,8 @@ class ScheduleUpdate(BaseModel):
     client_id: Optional[str] = None  # Now required for update if project_id is updated
     client_name: Optional[str] = None    
     schedule_name: Optional[str] = "Unknown Schedule"
+    site_supervisor_id: Optional[PyObjectId] = None
+    site_supervisor_name: Optional[str] = None
     site_address: Optional[str] = None
     input_params: Optional[InputParams] = None
     status: Optional[str] = None
@@ -230,6 +249,8 @@ class ScheduleUpdate(BaseModel):
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     floor_height: Optional[int] = None
+    slump_at_site: Optional[float] = 0.0
+    mother_plant_km: Optional[float] = 0.0
     pump_site_reach_time: Union[datetime, str] = None
     type: Optional[str] = "pumping"
     tm_overrule: Optional[int] = 1
@@ -241,6 +262,8 @@ class ScheduleUpdate(BaseModel):
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "XYZ Constructions",                
                 "schedule_name": "ABC - Road 1",
+                "site_supervisor_id": "60d5ec9af682fcd81a060e74",
+                "site_supervisor_name": "John Doe",
                 "site_address": "Updated Location",
                 "input_params": {
                     "quantity": 70,
@@ -261,6 +284,8 @@ class ScheduleUpdate(BaseModel):
                 "concreteGrade": 30,
                 "pumping_job": "Road",
                 "floor_height": 12,
+                "slump_at_site": 0.0,
+                "mother_plant_km": 0.0,
                 "pump_site_reach_time": "2023-06-26T07:30:00",
                 "type": "supply",
                 "tm_overrule": 1
