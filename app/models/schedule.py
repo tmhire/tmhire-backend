@@ -77,6 +77,7 @@ class ScheduleType(str, Enum):
 
 class ScheduleModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    schedule_name: Optional[str] = "Unknown Schedule"
     user_id: PyObjectId
     project_id: Optional[PyObjectId] = None  # Now always required
     project_name: Optional[str] = "Unknown Project"
@@ -111,6 +112,7 @@ class ScheduleModel(BaseModel):
         json_schema_extra={
             "example": {
                 "user_id": "60d5ec9af682fcd81a060e72",
+                "schedule_name": "ABC - Road 1",
                 "project_id": "60d5ec9af682fcd81a060e78",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
@@ -164,6 +166,7 @@ class ScheduleCreate(BaseModel):
     project_id: str
     client_id: str  # Now required
     client_name: Optional[str] = None
+    schedule_name: Optional[str] = "Unknown Schedule"
     # pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
@@ -181,6 +184,7 @@ class ScheduleCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "project_id": "60d5ec9af682fcd81a060e78",
+                "schedule_name": "ABC - Road 1",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
                 "pump_type": "boom",
@@ -215,7 +219,8 @@ class CalculateTM(ScheduleCreate):
 class ScheduleUpdate(BaseModel):
     project_id: Optional[str] = None
     client_id: Optional[str] = None  # Now required for update if project_id is updated
-    client_name: Optional[str] = None
+    client_name: Optional[str] = None    
+    schedule_name: Optional[str] = "Unknown Schedule"
     site_address: Optional[str] = None
     input_params: Optional[InputParams] = None
     status: Optional[str] = None
@@ -234,7 +239,8 @@ class ScheduleUpdate(BaseModel):
             "example": {
                 "project_id": "60d5ec9af682fcd81a060e79",
                 "client_id": "60d5ec9af682fcd81a060e70",
-                "client_name": "XYZ Constructions",
+                "client_name": "XYZ Constructions",                
+                "schedule_name": "ABC - Road 1",
                 "site_address": "Updated Location",
                 "input_params": {
                     "quantity": 70,
