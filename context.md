@@ -6,7 +6,7 @@ Implement Google SSO login using OAuth2 (placeholder is okay for now).
 
 Store user info:
 
-_id (ObjectId)
+\_id (ObjectId)
 
 email (string)
 
@@ -23,11 +23,11 @@ json
 Copy
 Edit
 {
-  "_id": ObjectId,
-  "user_id": ObjectId,
-  "identifier": "TM-A",
-  "capacity": 8.0,
-  "created_at": "2025-05-05T10:00:00"
+"\_id": ObjectId,
+"user_id": ObjectId,
+"identifier": "TM-A",
+"capacity": 8.0,
+"created_at": "2025-05-05T10:00:00"
 }
 Full CRUD required:
 
@@ -50,22 +50,23 @@ json
 Copy
 Edit
 {
-  "_id": ObjectId,
-  "user_id": ObjectId,
-  "client_name": "ABC Constructions",
-  "created_at": "2025-05-05T10:00:00",
-  "last_updated": "2025-05-05T10:00:00",
-  "input_params": {
-    "quantity": 60,
-    "pumping_speed": 30,
-    "onward_time": 30,
-    "return_time": 25,
-    "buffer_time": 5
-  },
-  "output_table": [...], // generated
-  "tm_count": 6, // from TM collection
-  "pumping_time": 2.0, // derived
-  "status": "draft"
+"\_id": ObjectId,
+"user_id": ObjectId,
+"client_name": "ABC Constructions",
+"created_at": "2025-05-05T10:00:00",
+"last_updated": "2025-05-05T10:00:00",
+"input_params": {
+"quantity": 60,
+"pumping_speed": 30,
+"onward_time": 30,
+"return_time": 25,
+"buffer_time": 5
+"load_time": 5
+},
+"output_table": [...], // generated
+"tm_count": 6, // from TM collection
+"pumping_time": 2.0, // derived
+"status": "draft"
 }
 🧮 Input Params (in schedule)
 These are submitted by user and stored:
@@ -80,6 +81,8 @@ return_time (min)
 
 buffer_time (min)
 
+load_time (min)
+
 🚫 Do not include tm_capacity or unloading_time in inputs. They are dynamically calculated.
 
 🔄 Dynamic Logic
@@ -87,12 +90,12 @@ TM Capacity: Calculate average capacity from the user's TM records.
 
 Unloading Time (min): Use this lookup based on average capacity:
 
-Capacity (m³)	Unloading Time
-6	10
-7	12
-8	14
-9	16
-10	18
+Capacity (m³) Unloading Time
+6 10
+7 12
+8 14
+9 16
+10 18
 
 Round the average capacity to the nearest key in the above table.
 
@@ -103,15 +106,15 @@ json
 Copy
 Edit
 [
-  {
-    "trip_no": 1,
-    "tm_no": "A",
-    "plant_start": "08:30",
-    "pump_start": "09:00",
-    "unloading_time": "09:12",
-    "return": "09:52"
-  },
-  ...
+{
+"trip_no": 1,
+"tm_no": "A",
+"plant_start": "08:30",
+"pump_start": "09:00",
+"unloading_time": "09:12",
+"return": "09:52"
+},
+...
 ]
 🧠 Services Required
 Get average TM capacity for a user
@@ -156,11 +159,11 @@ Copy
 Edit
 /app
 ├── main.py
-├── models/        # Mongo models or pydantic schemas
-├── schemas/       # Pydantic request/response models
-├── routes/        # API routes
-├── services/      # Business logic (avg capacity, unloading, etc.)
-└── db/            # Mongo connection init
+├── models/ # Mongo models or pydantic schemas
+├── schemas/ # Pydantic request/response models
+├── routes/ # API routes
+├── services/ # Business logic (avg capacity, unloading, etc.)
+└── db/ # Mongo connection init
 🛠️ Tech Stack
 FastAPI (backend framework)
 
@@ -180,4 +183,3 @@ MongoDB is free to host via MongoDB Atlas with a generous free tier (shared clus
 It works well with FastAPI using Motor (official async driver).
 
 Schema-less flexibility is great for rapidly iterating.
-

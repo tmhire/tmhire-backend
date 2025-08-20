@@ -729,6 +729,7 @@ async def get_gantt_data(
         schedule_id = str(schedule["_id"])
 
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0)
+        load_time = schedule.get("input_params", {}).get("load_time", 0)
 
         # Group trips by tm_id for this schedule
         trips_by_tm = {}
@@ -750,6 +751,7 @@ async def get_gantt_data(
             for i, trip in enumerate(trips):
                 # Parse all relevant datetimes
                 plant_load = trip.get("plant_load")
+                plant_buffer = trip.get("plant_buffer")
                 plant_start = trip.get("plant_start")
                 pump_start = trip.get("pump_start")
                 unloading_time = trip.get("unloading_time")
@@ -759,10 +761,24 @@ async def get_gantt_data(
                     plant_load_dt = plant_start_dt - timedelta(minutes=buffer_time) if plant_start_dt else None
                 else:
                     plant_load_dt = _parse_datetime_with_timezone(plant_load) if isinstance(plant_load, str) else plant_load
+                if plant_buffer is None:
+                    plant_buffer_dt = plant_load_dt - timedelta(minutes=buffer_time) if plant_load_dt else None
+                else:
+                    plant_buffer_dt = _parse_datetime_with_timezone(plant_buffer) if isinstance(plant_buffer, str) else plant_buffer
                 pump_start_dt = _parse_datetime_with_timezone(pump_start) if isinstance(pump_start, str) else pump_start
                 unloading_time_dt = _parse_datetime_with_timezone(unloading_time) if isinstance(unloading_time, str) else unloading_time
                 return_time_dt = _parse_datetime_with_timezone(return_time) if isinstance(return_time, str) else return_time
                 # Only add segments if both times are present and on the query_date
+                # Buffer
+                if plant_buffer_dt and plant_load_dt and (_is_between(start_datetime, plant_buffer_dt, end_datetime) or _is_between(start_datetime, plant_load_dt, end_datetime)):
+                    task_id = f"buffer-{schedule_id}-{tm_id}"
+                    tm_map[tm_id].tasks.append(GanttTask(
+                        id=task_id,
+                        start=plant_buffer_dt,
+                        end=plant_load_dt,
+                        client=client_name
+                    ))
+                    task_count += 1
                 # Load
                 if plant_load_dt and plant_start_dt and (_is_between(start_datetime, plant_load_dt, end_datetime) or _is_between(start_datetime, plant_start_dt, end_datetime)):
                     task_id = f"load-{schedule_id}-{tm_id}"

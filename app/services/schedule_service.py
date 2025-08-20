@@ -120,6 +120,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         
         # Add cycle_time and trip_no_for_tm and loading_time to each trip in output_table
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0 )
+        load_time = schedule.get("input_params", {}).get("load_time", 0 )
         tm_trip = {}
         for trip in schedule.get("output_table", []):
             # Calculate cycle_time
@@ -138,7 +139,10 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                     return_at = None
 
             if "plant_load" not in trip:
-                trip["plant_load"] = plant_start - timedelta(minutes=buffer_time) if plant_start else None
+                trip["plant_load"] = plant_start - timedelta(minutes=load_time) if plant_start else None
+
+            if "plant_buffer" not in trip:
+                trip["plant_buffer"] = plant_start - timedelta(minutes=buffer_time) if plant_start else None
 
             if plant_start and return_at:
                 trip["cycle_time"] = (return_at - plant_start).total_seconds()
@@ -258,13 +262,14 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_o
     onward_time = input_params.onward_time
     return_time = input_params.return_time
     buffer_time = input_params.buffer_time
+    load_time = input_params.load_time
     quantity = input_params.quantity
     pumping_speed = input_params.pumping_speed
     pump_onward_time = input_params.pump_onward_time
 
     # Calculate cycle time components
     unloading_time = get_unloading_time(avg_capacity)
-    cycle_time = (onward_time + return_time + buffer_time + unloading_time)/60
+    cycle_time = (onward_time + return_time + buffer_time + load_time + unloading_time)/60
     
     # Calculate pumping time
     pumping_time = quantity / pumping_speed
@@ -542,6 +547,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     onward_time = schedule["input_params"]["onward_time"]  # Always use TM onward_time for TM trips
     return_time = schedule["input_params"]["return_time"]
     buffer_time = schedule["input_params"]["buffer_time"]
+    load_time = schedule["input_params"]["load_time"]
 
     trips = []
     total_quantity = schedule["input_params"]["quantity"]
@@ -568,10 +574,10 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
         target_site_arrival_for_current_trip = unloading_end + timedelta(minutes=1) if trip_no > 1 else pump_available_time
 
         for tm in selected_tms:
-            # Calculate when TM becomes available after buffer time
+            # Calculate when TM becomes available after buffer and loading time
             min_tm_departure_time = tm_available_times[tm]
-            # Add buffer time to determine when TM is actually available for next trip
-            tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time)
+            # Add buffer and loading time to determine when TM is actually available for next trip
+            tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time+load_time)
             potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time)
             effective_site_arrival = max(target_site_arrival_for_current_trip, potential_tm_arrival_time)
 
@@ -595,11 +601,12 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
 
         pump_start = earliest_effective_site_arrival_for_best_tm
         plant_start = pump_start - timedelta(minutes=onward_time)
-        plant_load = plant_start - timedelta(minutes=buffer_time)
+        plant_load = plant_start - timedelta(minutes=load_time)
+        plant_buffer = plant_load - timedelta(minutes=buffer_time)
         unloading_end = pump_start + timedelta(minutes=tm_unloading_time)
         return_at = unloading_end + timedelta(minutes=return_time)
 
-        # Update next available time to include buffer time
+        # Update next available time to include buffer and loading time
         tm_available_times[selected_tm] = return_at
         tm_usage_count[selected_tm] += 1
         tm_trip_counter[selected_tm] += 1
@@ -622,6 +629,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
             tm_no=tm_identifier,
             tm_id=selected_tm,
             plant_load=plant_load,
+            plant_buffer=plant_buffer,
             plant_start=plant_start,
             pump_start=pump_start,
             unloading_time=unloading_end,

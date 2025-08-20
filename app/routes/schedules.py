@@ -170,6 +170,7 @@ async def delete_existing_schedule(
 #       - onward_time: Travel time from plant to site (minutes)
 #       - return_time: Travel time from site back to plant (minutes)
 #       - buffer_time: Buffer time between trips (minutes)
+#       - load_time: Loading time between trips (minutes)
 #       - pump_start: When pumping should start (datetime)
 #       - schedule_date: Date for the schedule (date)
     

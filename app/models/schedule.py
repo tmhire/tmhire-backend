@@ -17,6 +17,7 @@ class InputParams(BaseModel):
     pump_removal_time: Optional[int] = 0
     return_time: int
     buffer_time: int
+    load_time: int
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
     schedule_date: date = Field(default_factory=lambda: datetime.now().date())
     
@@ -33,6 +34,7 @@ class Trip(BaseModel):
     tm_no: str
     tm_id: str
     plant_load: Optional[Union[datetime, str]] = None
+    plant_buffer: Optional[Union[datetime, str]] = None
     plant_start: Union[datetime, str]
     pump_start: Union[datetime, str]
     unloading_time: Union[datetime, str]
@@ -135,6 +137,7 @@ class ScheduleModel(BaseModel):
                     "pump_removal_time": 10,
                     "return_time": 25,
                     "buffer_time": 5,
+                    "load_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
                     "schedule_date": "2023-06-25"
                 },
@@ -221,6 +224,7 @@ class ScheduleCreate(BaseModel):
                     "pump_removal_time": 10,
                     "return_time": 25,
                     "buffer_time": 5,
+                    "load_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
                     "schedule_date": "2023-06-25"
                 },
@@ -274,6 +278,7 @@ class ScheduleUpdate(BaseModel):
                     "pump_removal_time": 10,
                     "return_time": 25,
                     "buffer_time": 5,
+                    "load_time": 5,
                     "pump_start": "2023-06-26T08:00:00",
                     "schedule_date": "2023-06-26"
                 },
