@@ -17,7 +17,7 @@ class InputParams(BaseModel):
     pump_removal_time: Optional[int] = 0
     return_time: int
     buffer_time: int
-    load_time: int
+    load_time: int = 0
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
     schedule_date: date = Field(default_factory=lambda: datetime.now().date())
     
