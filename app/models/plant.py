@@ -8,6 +8,7 @@ class PlantModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: PyObjectId
     name: str
+    capacity: Optional[float] = None
     location: str
     address: Optional[str] = None
     coordinates: Optional[str] = None
@@ -24,6 +25,7 @@ class PlantModel(BaseModel):
         json_schema_extra={
             "example": {
                 "name": "Main Concrete Plant",
+                "capacity": 100.0,
                 "location": "Chennai",
                 "address": "123 Industrial Area, Chennai",
                 "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
@@ -37,6 +39,7 @@ class PlantModel(BaseModel):
 
 class PlantCreate(BaseModel):
     name: str
+    capacity: Optional[float] = None
     location: str
     address: Optional[str] = None
     coordinates: Optional[str] = None
@@ -49,6 +52,7 @@ class PlantCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "name": "Main Concrete Plant",
+                "capacity": 100.0,
                 "location": "Chennai",
                 "address": "123 Industrial Area, Chennai",
                 "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
@@ -62,6 +66,7 @@ class PlantCreate(BaseModel):
 
 class PlantUpdate(BaseModel):
     name: Optional[str] = None
+    capacity: Optional[float] = None
     location: Optional[str] = None
     address: Optional[str] = None
     coordinates: Optional[str] = None
@@ -74,6 +79,7 @@ class PlantUpdate(BaseModel):
         json_schema_extra={
             "example": {
                 "name": "Updated Plant Name",
+                "capacity": 100.0,
                 "location": "Updated Location",
                 "address": "Updated Address",
                 "coordinates": "https://maps.google.com/?q=12.9715987,77.594566",
