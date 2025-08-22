@@ -103,7 +103,7 @@ class ScheduleModel(BaseModel):
     mother_plant_km: Optional[float] = 0.0
     pump_site_reach_time: Optional[Union[datetime, str]] = None 
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
-    tm_overrule: Optional[int] = 1
+    tm_overrule: Optional[int] = None
     pumping_time: Optional[float] = None
     status: str = "draft"  # draft, generated, finalized, completed, cancelled
     type: Optional[ScheduleType] = "pumping"
@@ -194,7 +194,7 @@ class ScheduleCreate(BaseModel):
     pumping_time: Optional[float] = None
     input_params: InputParams
     type: Optional[str] = "pumping"
-    tm_overrule: Optional[int] = 1
+    tm_overrule: Optional[int] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -257,7 +257,7 @@ class ScheduleUpdate(BaseModel):
     mother_plant_km: Optional[float] = 0.0
     pump_site_reach_time: Union[datetime, str] = None
     type: Optional[str] = "pumping"
-    tm_overrule: Optional[int] = 1
+    tm_overrule: Optional[int] = None
     
     model_config = ConfigDict(
         json_schema_extra={

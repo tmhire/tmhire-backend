@@ -165,7 +165,8 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         input_params = InputParams(**schedule["input_params"])
         tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params, tm_overrule=schedule.get("tm_overrule", None))
         if schedule.get("tm_overrule", None):
-            del schedule["tm_overrule"]
+            schedule["tm_overrule"] = tm_suggestion["tm_overrule"]
+        del tm_suggestion["tm_overrule"]
         tm_suggestion.pop("tm_count", None)
         available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["schedule_date"])
         pump_type = schedule.get("pump_type")
@@ -266,12 +267,15 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_o
     quantity = input_params.quantity
     pumping_speed = input_params.pumping_speed
     pump_onward_time = input_params.pump_onward_time
+    unloading_time = input_params.unloading_time if input_params.unloading_time else ((avg_capacity / pumping_speed) * 60)
 
     # Calculate cycle time components
-    unloading_time = get_unloading_time(avg_capacity)
-    cycle_time = (onward_time + return_time + buffer_time + load_time + unloading_time)/60
+    cycle_time = onward_time + return_time + buffer_time + load_time + unloading_time
     
-    tm_count = math.ceil((cycle_time * 60) / unloading_time)
+    tm_count = math.ceil(cycle_time / unloading_time)
+    print(cycle_time, unloading_time, tm_count)
+
+    cycle_time = cycle_time / 60  # Convert cycle time to minutes
     
     # Calculate total trips needed
     total_trips = math.ceil(quantity / avg_capacity)
