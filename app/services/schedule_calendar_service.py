@@ -822,14 +822,14 @@ async def get_gantt_data(
                 # Cushion (gap to next trip)
                 if return_time_dt and i+1 < len(trips):
                     next_trip = trips[i+1]
-                    next_plant_start = next_trip.get("plant_start")
-                    next_plant_start_dt = _parse_datetime_with_timezone(next_plant_start) if isinstance(next_plant_start, str) else next_plant_start
-                    if next_plant_start_dt and (_is_between(start_datetime, next_plant_start_dt, end_datetime) or _is_between(start_datetime, return_time_dt, end_datetime)) and next_plant_start_dt > return_time_dt:
+                    next_plant_load = next_trip.get("plant_load")
+                    next_plant_load_dt = _parse_datetime_with_timezone(next_plant_load) if isinstance(next_plant_load, str) else next_plant_load
+                    if next_plant_load_dt and (_is_between(start_datetime, next_plant_load_dt, end_datetime) or _is_between(start_datetime, return_time_dt, end_datetime)) and next_plant_load_dt > return_time_dt:
                         task_id = f"cushion-{schedule_id}-{tm_id}"
                         tm_map[tm_id].tasks.append(GanttTask(
                             id=task_id,
                             start=return_time_dt,
-                            end=next_plant_start_dt,
+                            end=next_plant_load_dt,
                             client=client_name
                         ))
                         task_count += 1
