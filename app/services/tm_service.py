@@ -4,11 +4,12 @@ from bson import ObjectId
 from typing import List, Optional, Dict, Any
 from app.services.schedule_calendar_service import get_tm_availability
 from datetime import datetime, date, time, timedelta
+from pymongo import DESCENDING
 
 async def get_all_tms(user_id: str) -> List[TransitMixerModel]:
     """Get all transit mixers for a user"""
     tms = []
-    async for tm in transit_mixers.find({"user_id": ObjectId(user_id)}):
+    async for tm in transit_mixers.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
         tms.append(TransitMixerModel(**tm))
     return tms
 

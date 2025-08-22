@@ -3,11 +3,12 @@ from app.models.client import ClientModel, ClientCreate, ClientUpdate
 from bson import ObjectId
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from pymongo import DESCENDING
 
 async def get_all_clients(user_id: str) -> List[ClientModel]:
     """Get all clients for a user"""
     client_list = []
-    async for client in clients.find({"user_id": ObjectId(user_id)}):
+    async for client in clients.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
         client_list.append(ClientModel(**client))
     return client_list
 

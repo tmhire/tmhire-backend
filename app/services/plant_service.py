@@ -2,11 +2,12 @@ from app.db.mongodb import plants, transit_mixers
 from app.models.plant import PlantModel, PlantCreate, PlantUpdate
 from bson import ObjectId
 from typing import List, Optional, Dict
+from pymongo import DESCENDING
 
 async def get_all_plants(user_id: str) -> List[PlantModel]:
     """Get all plants for a user"""
     plant_list = []
-    async for plant in plants.find({"user_id": ObjectId(user_id)}):
+    async for plant in plants.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
         plant_list.append(PlantModel(**plant))
     return plant_list
 

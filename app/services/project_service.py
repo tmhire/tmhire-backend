@@ -6,11 +6,12 @@ from datetime import datetime
 from app.services.client_service import get_client
 from app.services.plant_service import get_plant
 from app.services.team_service import get_team_member
+from pymongo import DESCENDING
 
 async def get_all_projects(user_id: str) -> List[ProjectModel]:
     """Get all projects for a user"""
     project_list = []
-    async for project in projects.find({"user_id": ObjectId(user_id)}):
+    async for project in projects.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
         project_list.append(ProjectModel(**project))
     return project_list
 

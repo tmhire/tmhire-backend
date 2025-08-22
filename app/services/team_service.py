@@ -2,6 +2,7 @@ from app.db.mongodb import team
 from app.models.team import TeamMemberModel, TeamMemberCreate, TeamMemberUpdate
 from bson import ObjectId
 from typing import List, Optional, Dict, Literal
+from pymongo import DESCENDING
 
 groupSet = {
     "client": ["sales-engineer"],
@@ -12,7 +13,7 @@ groupSet = {
 async def get_all_teams(user_id: str) -> List[TeamMemberModel]:
     """Get all team members for a user"""
     team_list = []
-    async for member in team.find({"user_id": ObjectId(user_id)}):
+    async for member in team.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
         team_list.append(TeamMemberModel(**member))
     return team_list
 
