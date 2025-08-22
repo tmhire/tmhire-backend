@@ -24,6 +24,8 @@ async def create_tm(tm: TransitMixerCreate, user_id: str) -> TransitMixerModel:
     """Create a new transit mixer"""
     tm_data = tm.model_dump()
     tm_data["user_id"] = ObjectId(user_id)
+    tm_data["created_at"] = datetime.utcnow()
+    tm_data["last_updated"] = datetime.utcnow()
     
     # Convert plant_id to ObjectId if it exists
     if "plant_id" in tm_data and tm_data["plant_id"]:

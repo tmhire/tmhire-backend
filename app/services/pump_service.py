@@ -47,6 +47,7 @@ async def create_pump(pump: PumpCreate, user_id: str) -> PumpModel:
         raise ValueError("Pipeline Gang ID does not exist")
 
     pump_data["created_at"] = datetime.utcnow()
+    pump_data["last_updated"] = datetime.utcnow()
     result = await pumps.insert_one(pump_data)
     new_pump = await pumps.find_one({"_id": result.inserted_id})
     return PumpModel(**new_pump)

@@ -271,12 +271,7 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_o
     unloading_time = get_unloading_time(avg_capacity)
     cycle_time = (onward_time + return_time + buffer_time + load_time + unloading_time)/60
     
-    # Calculate pumping time
-    pumping_time = quantity / pumping_speed
-    
-    # Calculate required number of TMs using the formula:
-    # TMs = (Quantity × Cycle Time) / (Pumping Time × TM Capacity)
-    tm_count = math.ceil((quantity * cycle_time) / (pumping_time * avg_capacity))
+    tm_count = math.ceil((cycle_time * 60) / unloading_time)
     
     # Calculate total trips needed
     total_trips = math.ceil(quantity / avg_capacity)

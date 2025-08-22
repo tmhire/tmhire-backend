@@ -1,3 +1,4 @@
+from datetime import datetime
 from app.db.mongodb import team
 from app.models.team import TeamMemberModel, TeamMemberCreate, TeamMemberUpdate
 from bson import ObjectId
@@ -40,6 +41,8 @@ async def create_team_member(member: TeamMemberCreate, user_id: str) -> TeamMemb
     """Create a new team member"""
     member_data = member.model_dump()
     member_data["user_id"] = ObjectId(user_id)
+    member_data["created_at"] = datetime.utcnow()
+    member_data["last_updated"] = datetime.utcnow()
     
     result = await team.insert_one(member_data)
     

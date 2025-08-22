@@ -41,7 +41,8 @@ async def create_user(user: UserCreate) -> UserModel:
     """Create a new user"""
     user_data = user.model_dump()
     user_data["created_at"] = datetime.utcnow()
-    
+    user_data["last_updated"] = datetime.utcnow()
+
     # Check if user already exists
     existing_user = await users.find_one({"email": user_data["email"]})
     if existing_user:

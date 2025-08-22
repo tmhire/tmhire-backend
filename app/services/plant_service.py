@@ -1,3 +1,4 @@
+from datetime import datetime
 from app.db.mongodb import plants, transit_mixers
 from app.models.plant import PlantModel, PlantCreate, PlantUpdate
 from bson import ObjectId
@@ -22,6 +23,8 @@ async def create_plant(plant: PlantCreate, user_id: str) -> PlantModel:
     """Create a new plant"""
     plant_data = plant.model_dump()
     plant_data["user_id"] = ObjectId(user_id)
+    plant_data["created_at"] = datetime.utcnow()
+    plant_data["last_updated"] = datetime.utcnow()
     
     result = await plants.insert_one(plant_data)
     
