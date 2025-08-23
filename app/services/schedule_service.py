@@ -547,6 +547,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     return_time = schedule["input_params"]["return_time"]
     buffer_time = schedule["input_params"]["buffer_time"]
     load_time = schedule["input_params"]["load_time"]
+    unloading_time = schedule["input_params"]["unloading_time"]
 
     trips = []
     total_quantity = schedule["input_params"]["quantity"]
@@ -602,7 +603,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
         plant_start = pump_start - timedelta(minutes=onward_time)
         plant_load = plant_start - timedelta(minutes=load_time)
         plant_buffer = plant_load - timedelta(minutes=buffer_time)
-        unloading_end = pump_start + timedelta(minutes=tm_unloading_time)
+        unloading_end = pump_start + timedelta(minutes=unloading_time)
         return_at = unloading_end + timedelta(minutes=return_time)
 
         # Update next available time to include buffer and loading time
