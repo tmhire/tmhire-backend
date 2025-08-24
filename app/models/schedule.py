@@ -9,7 +9,7 @@ from app.models.pump import PumpModel
 
 class InputParams(BaseModel):
     quantity: float
-    pumping_speed: float
+    pumping_speed: float = 0.0
     unloading_time: int = 0
     onward_time: int
     pump_onward_time: int = 0
@@ -107,6 +107,8 @@ class ScheduleModel(BaseModel):
     pumping_time: Optional[float] = None
     status: str = "draft"  # draft, generated, finalized, completed, cancelled
     type: Optional[ScheduleType] = "pumping"
+    trip_count: Optional[int] = None
+    is_round_trip: Optional[bool] = False
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -151,7 +153,10 @@ class ScheduleModel(BaseModel):
                 "pumping_speed": 30,
                 "pumping_time": 2.0,
                 "status": "draft",
-                "type": "supply"
+                "type": "supply",
+                "tm_overrule": 1,
+                "trip_count": 5,
+                "is_round_trip": False
             }
         }
     )
@@ -195,6 +200,8 @@ class ScheduleCreate(BaseModel):
     input_params: InputParams
     type: Optional[str] = "pumping"
     tm_overrule: Optional[int] = None
+    trip_count: Optional[int] = None
+    is_round_trip: Optional[bool] = False
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -229,7 +236,9 @@ class ScheduleCreate(BaseModel):
                     "schedule_date": "2023-06-25"
                 },
                 "type": "supply",
-                "tm_overrule": 1
+                "tm_overrule": 1,
+                "trip_count": 5,
+                "is_round_trip": False
             }
         }
     )
@@ -258,6 +267,8 @@ class ScheduleUpdate(BaseModel):
     pump_site_reach_time: Union[datetime, str] = None
     type: Optional[str] = "pumping"
     tm_overrule: Optional[int] = None
+    trip_count: Optional[int] = None
+    is_round_trip: Optional[bool] = False
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -293,8 +304,9 @@ class ScheduleUpdate(BaseModel):
                 "mother_plant_km": 0.0,
                 "pump_site_reach_time": "2023-06-26T07:30:00",
                 "type": "supply",
-                "tm_overrule": 1
-
+                "tm_overrule": 1,
+                "trip_count": 5,
+                "is_round_trip": False
             }
         }
     ) 
