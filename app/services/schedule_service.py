@@ -126,6 +126,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
             # Calculate cycle_time
             plant_start = trip.get("plant_start")
             return_at = trip.get("return")
+            tm_start_use = trip.get("plant_buffer", None) or trip.get("plant_load", None) or plant_start
             # Convert to datetime if needed
             if isinstance(plant_start, str):
                 try:
@@ -137,6 +138,11 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                     return_at = datetime.fromisoformat(return_at)
                 except Exception:
                     return_at = None
+            if isinstance(tm_start_use, str):
+                try:
+                    tm_start_use = datetime.fromisoformat(tm_start_use)
+                except Exception:
+                    tm_start_use = None
 
             if "plant_load" not in trip:
                 trip["plant_load"] = plant_start - timedelta(minutes=load_time) if plant_start else None
@@ -156,8 +162,8 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                 tm_trip[tm_id] = {"last_return": None, "trip_count": 1}
             else:
                 tm_trip[tm_id]["trip_count"] += 1
-                if tm_trip[tm_id]["last_return"] and plant_start:
-                    trip["cushion_time"] = (plant_start - tm_trip[tm_id]["last_return"]).total_seconds()
+                if tm_trip[tm_id]["last_return"] and tm_start_use:
+                    trip["cushion_time"] = (tm_start_use - tm_trip[tm_id]["last_return"]).total_seconds()
             if return_at:
                 tm_trip[tm_id]["last_return"] = return_at
             trip["trip_no_for_tm"] = tm_trip[tm_id]["trip_count"]
