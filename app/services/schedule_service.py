@@ -9,7 +9,7 @@ from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
 from datetime import datetime, timedelta, date, time
 from bson import ObjectId
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from app.schemas.utils import safe_serialize
 import math
 
@@ -54,6 +54,14 @@ async def get_all_schedules(user_id: str, type: ScheduleType) -> List[ScheduleMo
         
         schedule_list.append(ScheduleModel(**schedule))
     return schedule_list
+
+def _convert_to_datetime(date_str: str | datetime) -> datetime:
+    if isinstance(date_str, str):
+        try:
+            date_str = datetime.fromisoformat(date_str)
+        except Exception:
+            date_str = None
+    return date_str
 
 async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
     schedule = await schedules.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
@@ -124,25 +132,10 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         tm_trip = {}
         for trip in schedule.get("output_table", []):
             # Calculate cycle_time
-            plant_start = trip.get("plant_start")
-            return_at = trip.get("return")
-            tm_start_use = trip.get("plant_buffer", None) or trip.get("plant_load", None) or plant_start
-            # Convert to datetime if needed
-            if isinstance(plant_start, str):
-                try:
-                    plant_start = datetime.fromisoformat(plant_start)
-                except Exception:
-                    plant_start = None
-            if isinstance(return_at, str):
-                try:
-                    return_at = datetime.fromisoformat(return_at)
-                except Exception:
-                    return_at = None
-            if isinstance(tm_start_use, str):
-                try:
-                    tm_start_use = datetime.fromisoformat(tm_start_use)
-                except Exception:
-                    tm_start_use = None
+            # Also convert to datetime if needed
+            plant_start = _convert_to_datetime(trip.get("plant_start"))
+            return_at = _convert_to_datetime(trip.get("return"))
+            tm_start_use = _convert_to_datetime(trip.get("plant_buffer", None) or trip.get("plant_load", None) or plant_start)
 
             if "plant_load" not in trip:
                 trip["plant_load"] = plant_start - timedelta(minutes=load_time) if plant_start else None
@@ -174,7 +167,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
             schedule["tm_overrule"] = tm_suggestion["tm_overrule"]
         del tm_suggestion["tm_overrule"]
         tm_suggestion.pop("tm_count", None)
-        available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["schedule_date"])
+        available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["pump_start"])
         pump_type = schedule.get("pump_type")
         for index, pump in enumerate(available_pumps):
             if pump.get("type") != pump_type:
@@ -183,7 +176,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         return GetScheduleResponse(**schedule, **tm_suggestion, available_tms=available_tms, available_pumps=available_pumps)
     return None
 
-async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Optional[ScheduleModel]:
+async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Optional[GetScheduleResponse]:
     schedule_data = {k: v for k, v in schedule.model_dump().items() if v is not None}
 
     if not schedule_data:
@@ -280,7 +273,6 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_o
     cycle_time = onward_time + return_time + buffer_time + load_time + unloading_time
     
     tm_count = math.ceil(cycle_time / unloading_time)
-    print(cycle_time, unloading_time, tm_count)
 
     cycle_time = cycle_time / 60  # Convert cycle time to minutes
     
@@ -301,29 +293,62 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_o
         "tm_overrule": tm_overrule if tm_overrule is not None else tm_count
     }
 
-async def _get_tm_ids_and_pump_ids_by_schedule_date(target_date: date, user_id: str) -> set[str]:
-    target_date = _ensure_dateobj(target_date)
-    tm_ids, pump_ids = set(), set()
+async def _get_tm_ids_and_pump_ids_by_schedule_date(target_datetime: date, user_id: str) -> Tuple[Dict[str, Any]]:
+    target_datetime = _convert_to_datetime(target_datetime)
+    if target_datetime is None:
+        return {}, {}
+    previous_day, successive_day = target_datetime - timedelta(days=1), target_datetime + timedelta(days=1)
+    tm_ids, pump_ids = {}, {}
     async for schedule in schedules.find({
-        "input_params.schedule_date": target_date.isoformat(),
+        "input_params.schedule_date": {
+            "$gte": previous_day.isoformat(),
+            "$lte": successive_day.isoformat()
+        },
         "status": "generated",
         "user_id": ObjectId(user_id)
     }):
+        schedule_id = str(schedule.get("_id"))
         for trip in schedule.get("output_table", []):
-            tm_id = trip.get("tm_id")
-            if tm_id:
-                tm_ids.add(tm_id)
+            if trip.get("plant_buffer", None) is None or trip.get("return", None) is None:
+                continue
+            tm_id = str(trip.get("tm_id"))
+            if tm_id not in tm_ids:
+                tm_ids[tm_id] = {}
+            if schedule_id not in tm_ids[tm_id]:
+                tm_ids[tm_id][schedule_id] = {"start": trip.get("plant_buffer"), "end": trip.get("return"), "schedule_no": schedule.get("schedule_no", "")}
+                continue
+            tm_ids[tm_id][schedule_id]["start"] = min(tm_ids[tm_id][schedule_id]["start"], trip.get("plant_buffer"))
+            tm_ids[tm_id][schedule_id]["end"] = max(tm_ids[tm_id][schedule_id]["end"], trip.get("return"))
         if ("status" in schedule and schedule["status"] == "draft") or "pump" not in schedule:
             continue
-        pump_id = schedule.get("pump")
+
+         # Find the earliest pump_start and latest return in output_table
+        trips = schedule.get("output_table", [])
+        if not trips:
+            continue
+        start_time = trips[0].get("pump_start")
+        end_time = trips[-1].get("unloading_time")
+        if not start_time or not end_time:
+            continue
+        
+        pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
+        pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
+        pump_removal_time = schedule.get("input_params", {}).get("pump_removal_time", 0)
+        start_time = _convert_to_datetime(start_time)
+        end_time = _convert_to_datetime(end_time)
+        start_time = start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))
+        end_time = end_time + timedelta(minutes=pump_removal_time + pump_onward_time)
+        pump_id = str(schedule.get("pump"))
         if pump_id:
-            pump_ids.add(str(pump_id))
+            if pump_id not in pump_ids:
+                pump_ids[pump_id] = {}
+            pump_ids[pump_id][schedule_id] = {"start": start_time, "end": end_time, "schedule_no": schedule.get("schedule_no", )}
     return tm_ids, pump_ids
 
-async def get_available_tms_pumps(user_id: str, schedule_date: date) -> List[Dict[str, Any]]:
+async def get_available_tms_pumps(user_id: str, schedule_datetime: datetime) -> Tuple[Dict[str, Any]]:
     tms = await get_all_tms(user_id)
     pumps = await get_all_pumps(user_id)
-    used_tms, used_pumps = await _get_tm_ids_and_pump_ids_by_schedule_date(schedule_date, user_id)
+    used_tms, used_pumps = await _get_tm_ids_and_pump_ids_by_schedule_date(schedule_datetime, user_id)
     available_tm_list, available_pump_list = [], []
 
     for tm in tms:
@@ -332,13 +357,15 @@ async def get_available_tms_pumps(user_id: str, schedule_date: date) -> List[Dic
             "identifier": tm.identifier,
             "capacity": tm.capacity,
             "plant_id": str(tm.plant_id) if tm.plant_id else None,
-            "availability": str(tm.id) not in used_tms
+            "availability": str(tm.id) not in used_tms,
+            "unavailable_times": used_tms[str(tm.id)] if str(tm.id) in used_tms else None,
         })
     for pump in pumps:
         available_pump_list.append({
             **pump.model_dump(by_alias=True),
             "id": str(pump.id),
-            "availability": str(pump.id) not in used_pumps
+            "availability": str(pump.id) not in used_pumps,
+            "unavailable_times": used_pumps[str(pump.id)] if str(pump.id) in used_pumps else None,
         })
 
 

@@ -106,7 +106,7 @@ async def create_schedule(
         data=result
     )
 
-@router.put("/{schedule_id}", response_model=StandardResponse[ScheduleModel])
+@router.put("/{schedule_id}", response_model=StandardResponse[GetScheduleResponse])
 async def update_existing_schedule(
     schedule_id: str,
     schedule: ScheduleUpdate,

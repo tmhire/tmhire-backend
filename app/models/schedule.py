@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Union
+from typing import Any, Optional, List, Union
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 from enum import Enum
@@ -78,6 +78,7 @@ class ScheduleType(str, Enum):
 
 
 class ScheduleModel(BaseModel):
+    schedule_no: str = ""
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     schedule_name: Optional[str] = "Unknown Schedule"
     user_id: PyObjectId
@@ -167,10 +168,14 @@ class AvailableTM(BaseModel):
     capacity: float
     plant_id: Optional[str]
     availability: bool
+    unavailable_times: Optional[Any] = None
 
 class AvailablePump(PumpModel):
     id: str
     availability: bool
+    pump_start: Optional[Union[datetime, str]] = None
+    pump_end: Optional[Union[datetime, str]] = None
+    unavailable_times: Optional[Any]= None
 
 class GetScheduleResponse(ScheduleModel):
     available_tms: Optional[List[AvailableTM]] = Field(default_factory=list)
@@ -180,6 +185,7 @@ class GetScheduleResponse(ScheduleModel):
     available_pumps: Optional[List[AvailablePump]] = Field(default_factory=list)
 
 class ScheduleCreate(BaseModel):
+    schedule_no: str = ""
     project_id: str
     client_id: str  # Now required
     client_name: Optional[str] = None
@@ -247,6 +253,7 @@ class CalculateTM(ScheduleCreate):
     tm_id: str
 
 class ScheduleUpdate(BaseModel):
+    schedule_no: str = ""
     project_id: Optional[str] = None
     client_id: Optional[str] = None  # Now required for update if project_id is updated
     client_name: Optional[str] = None    
