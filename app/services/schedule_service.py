@@ -26,7 +26,10 @@ UNLOADING_TIME_LOOKUP = {
 
 async def get_all_schedules(user_id: str, type: ScheduleType) -> List[ScheduleModel]:
     schedule_list = []
-    async for schedule in schedules.find({"user_id": ObjectId(user_id), "type": type.value}).sort("created_at", DESCENDING):
+    query = {"user_id": ObjectId(user_id)}
+    if type != ScheduleType.all:
+        query["type"] = type.value
+    async for schedule in schedules.find(query).sort("created_at", DESCENDING):
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
         

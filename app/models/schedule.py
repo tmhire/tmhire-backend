@@ -73,6 +73,7 @@ class PumpType(str, Enum):
     BOOM = "boom"
 
 class ScheduleType(str, Enum):
+    all = "all"
     supply = "supply"
     pumping = "pumping"
 
