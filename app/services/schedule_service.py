@@ -1,8 +1,9 @@
+import asyncio
 from pymongo import DESCENDING
 from app.db.mongodb import schedules, transit_mixers
 from app.models.schedule import GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip
-from app.services.plant_service import get_plant
-from app.services.project_service import get_project
+from app.services.plant_service import get_all_plants, get_plant
+from app.services.project_service import get_all_projects, get_project
 from app.services.pump_service import get_all_pumps
 from app.services.team_service import get_team_member
 from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
@@ -29,7 +30,23 @@ async def get_all_schedules(user_id: str, type: ScheduleType) -> List[ScheduleMo
     query = {"user_id": ObjectId(user_id)}
     if type != ScheduleType.all:
         query["type"] = type.value
-    async for schedule in schedules.find(query).sort("created_at", DESCENDING):
+
+    all_plants, all_projects, all_schedules = await asyncio.gather(
+        get_all_plants(user_id),
+        get_all_projects(user_id),
+        schedules.find(query).sort("created_at", DESCENDING).to_list(length=None)
+    )
+
+    plant_map = {}
+    for plant in all_plants:
+        plant_map[str(plant.id)] = plant.name
+
+    project_map = {}
+    for project in all_projects:
+        plant_name = plant_map[str(project.mother_plant_id)]
+        project_map[str(project.id)] = {**project.model_dump(), "plant_name": plant_name}
+
+    for schedule in all_schedules:
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
         
@@ -54,6 +71,10 @@ async def get_all_schedules(user_id: str, type: ScheduleType) -> List[ScheduleMo
                     except ValueError:
                         # If can't parse, just leave as is and let Pydantic handle the error
                         pass
+
+        schedule["mother_plant_name"] = project_map[str(schedule.get("project_id", None))].get("plant_name", None)
+        schedule["project_name"] = project_map[str(schedule.get("project_id", None))].get("name", None)
+        schedule["site_address"] = project_map[str(schedule.get("project_id", None))].get("address", None)
         
         schedule_list.append(ScheduleModel(**schedule))
     return schedule_list
