@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import List, Dict, Any
-from datetime import date
-from app.models.schedule import GetScheduleResponse, ScheduleCreate, ScheduleModel, ScheduleType, ScheduleUpdate
+from typing import List, Dict, Any, Optional, Union
+from datetime import date, datetime
+
+from pydantic import BaseModel
+from app.models.schedule import GenerateScheduleBody, GetScheduleResponse, ScheduleCreate, ScheduleModel, ScheduleType, ScheduleUpdate
 from app.models.user import UserModel
 from app.services.schedule_service import (
     get_all_schedules,
@@ -189,7 +191,7 @@ async def delete_existing_schedule(
 @router.post("/{schedule_id}/generate-schedule", response_model=StandardResponse[GetScheduleResponse])
 async def generate_schedule_endpoint(
     schedule_id: str,
-    body: Dict,
+    body: GenerateScheduleBody,
     current_user: UserModel = Depends(get_current_user)
 ):
     """
@@ -205,15 +207,17 @@ async def generate_schedule_endpoint(
     Each trip includes TM assignment, timings, and concrete volumes.
     """
     try:
-        selected_tms = body.get("selected_tms", [])
+        selected_tms = body.selected_tms
         if not selected_tms or not isinstance(selected_tms, list):
             raise ValueError("selected_tms must be a non-empty list of TM IDs")
         
-        pump_id = body.get("pump", None)
-        if pump_id is None and body.get("type", "") == "pumping":
+        pump_id = body.pump
+        if pump_id is None and body.type == "pumping":
             raise ValueError("pump ID is required to generate the schedule")
+
+        partially_available = body.partially_available
         
-        schedule = await generate_schedule(schedule_id, selected_tms, pump_id, str(current_user.id), body.get("type", "pumping"))
+        schedule = await generate_schedule(schedule_id, selected_tms, pump_id, str(current_user.id), body.type, body.partially_available)
         
         # Convert the schedule to a dict for safer serialization
         schedule_dict = {}

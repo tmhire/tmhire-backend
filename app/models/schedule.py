@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Any, Optional, List, Union
+from typing import Any, Dict, Optional, List, Union
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 from enum import Enum
@@ -317,4 +317,15 @@ class ScheduleUpdate(BaseModel):
                 "is_round_trip": False
             }
         }
-    ) 
+    )
+
+class AvailabilityBody(BaseModel):
+    schedule_no: str = ""
+    start: Union[datetime, str] = ""
+    end: Union[datetime, str] = ""
+
+class GenerateScheduleBody(BaseModel):
+    selected_tms: List[str] = []
+    pump: Optional[str] = None
+    partially_available: Optional[Dict[str, AvailabilityBody]] = {}
+    type: Optional[str] = "pumping"
