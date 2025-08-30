@@ -327,5 +327,6 @@ class AvailabilityBody(BaseModel):
 class GenerateScheduleBody(BaseModel):
     selected_tms: List[str] = []
     pump: Optional[str] = None
-    partially_available: Optional[Dict[str, AvailabilityBody]] = {}
+    partially_available_tm: Optional[Dict[str, AvailabilityBody]] = {}
+    partially_available_pump: Optional[Dict[str, AvailabilityBody]] = {}
     type: Optional[str] = "pumping"

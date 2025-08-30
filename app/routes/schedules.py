@@ -215,9 +215,7 @@ async def generate_schedule_endpoint(
         if pump_id is None and body.type == "pumping":
             raise ValueError("pump ID is required to generate the schedule")
 
-        partially_available = body.partially_available
-        
-        schedule = await generate_schedule(schedule_id, selected_tms, pump_id, str(current_user.id), body.type, body.partially_available)
+        schedule = await generate_schedule(schedule_id, selected_tms, pump_id, str(current_user.id), body.type, body.partially_available_tm)
         
         # Convert the schedule to a dict for safer serialization
         schedule_dict = {}

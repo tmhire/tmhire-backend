@@ -532,7 +532,7 @@ async def check_tm_availability(schedule_date: date, selected_tms: List[str], us
         "unavailable_tms": unavailable_tms
     }
 
-async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, user_id: str, type: str, partially_available: Dict[str, AvailabilityBody]) -> ScheduleModel:
+async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, user_id: str, type: str, partially_available_tm: Dict[str, AvailabilityBody]) -> ScheduleModel:
     """Generate the schedule based on selected Transit Mixers with single pump constraint."""
     schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
     if not schedule:
@@ -643,8 +643,8 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
         for tm in selected_tms:
             # Calculate when TM becomes available after buffer and loading time
             partially_available_tm_end_time = datetime.min
-            if tm in partially_available:
-                partially_available_tm_end_time = _convert_to_datetime(partially_available[tm].end) + timedelta(minutes=1)
+            if tm in partially_available_tm:
+                partially_available_tm_end_time = _convert_to_datetime(partially_available_tm[tm].end) + timedelta(minutes=1)
             
             if not partially_available_tm_end_time or partially_available_tm_end_time is None:
                 partially_available_tm_end_time = datetime.min
