@@ -27,7 +27,20 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         schedules.find({
             "user_id": ObjectId(user_id_obj),
             "status": "generated",
-            "input_params.schedule_date": date_val.isoformat()
+            "$or": [
+            {
+                "output_table.plant_start": {
+                    "$gte": day_start.isoformat(),
+                    "$lt": day_end.isoformat()
+                }
+            },
+            {
+                "output_table.return": {
+                    "$gte": day_start.isoformat(),
+                    "$lt": day_end.isoformat()
+                }
+            }
+        ]
         }).sort("created_at", DESCENDING).to_list(length=None)
     )
 
@@ -89,10 +102,12 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         # Find the earliest pump_start and latest return in output_table
         trips = schedule.get("output_table", [])
         if not trips:
+            print("No trips", trips, schedule)
             continue
         start_time = trips[0].get("pump_start")
         end_time = trips[-1].get("unloading_time")
         if not start_time or not end_time:
+            print("no start and end time", start_time, end_time)
             continue
         pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
         pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
@@ -102,6 +117,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         actual_start_time = start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))
         actual_end_time = end_time + timedelta(minutes=pump_removal_time + pump_onward_time)
         if actual_start_time == None or actual_end_time == None:
+            print("no actual start and end time", actual_start_time, actual_end_time)
             continue
         
         pump, plant_id_of_pump = None, None
@@ -117,7 +133,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
             plant_table[plant_id_of_pump][f"{pump_type}_total_hours"] += (actual_end_time - actual_start_time).total_seconds() / 3600
 
         tm_usage_in_schedule = {}
-        for trip in schedule.get("output_table", []):
+        for trip in trips:
             tm, plant_id_of_tm = None, None
             tm_id = str(trip.get("tm_id", None))
             if tm_id in tm_map:
@@ -139,6 +155,24 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
                 tm_usage_in_schedule[tm_id]["end"] = max(tm_usage_in_schedule[tm_id]["end"], trip.get("return"))
         for tm_id in tm_usage_in_schedule.keys():
             plant_table[plant_id_of_tm]["tm_used_total_hours"] += ( _parse_datetime_with_timezone(tm_usage_in_schedule[tm_id]["end"]) - _parse_datetime_with_timezone(tm_usage_in_schedule[tm_id]["start"]) ).total_seconds() / 3600
+        
+    # Count active but not used TMs and Pumps
+    for tm in tm_map.values():
+        if tm["seen"] == False and tm.get("status", "active") == "active":
+            plant_table[str(tm["plant_id"])]["tm_active_but_not_used"] += 1
+    for pump in pump_map.values():
+        if pump["seen"] == False and pump.get("status", "active") == "active":
+            if pump.get("type") == "line":
+                plant_table[str(pump["plant_id"])]["line_pump_active_but_not_used"] += 1
+            elif pump.get("type") == "boom":
+                plant_table[str(pump["plant_id"])]["boom_pump_active_but_not_used"] += 1
+        
+    for column in plant_table.values():
+        column["pump_jobs"] = len(column["pump_jobs"])
+        column["supply_jobs"] = len(column["supply_jobs"])
+        column["tm_used_total_hours"] = round(column["tm_used_total_hours"], 2)
+        column["line_pump_used_total_hours"] = round(column["line_pump_used_total_hours"], 2)
+        column["boom_pump_used_total_hours"] = round(column["boom_pump_used_total_hours"], 2)
 
     # Calculate monthly statistics for the past 12 months
     monthly_stats = await get_monthly_stats(user_id_obj)
