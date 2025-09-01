@@ -303,7 +303,7 @@ def _ensure_dateobj(date: datetime | str) -> date:
     elif date and isinstance(date, datetime):
         # Extract just the date part if it's a datetime
         date = date.date()
-    else:
+    elif date is None:
         # If no date is provided, use today's date
         date = datetime.now().date()
         

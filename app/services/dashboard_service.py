@@ -1,33 +1,145 @@
+import asyncio
 from app.db.mongodb import plants, transit_mixers, schedules, pumps, clients
 from bson import ObjectId
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from calendar import monthrange
+from pymongo import DESCENDING
+from app.services.plant_service import get_all_plants
+from app.services.pump_service import get_all_pumps
+from app.services.schedule_calendar_service import _ensure_dateobj, _parse_datetime_with_timezone
+from app.services.tm_service import get_all_tms
 
-async def get_dashboard_stats(user_id: str) -> Dict[str, Any]:
+async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, Any]:
     """Get all dashboard statistics for a user."""
     # Convert string user_id to ObjectId
     user_id_obj = ObjectId(user_id)
     
+    date_val = _ensure_dateobj(date_val)
+    day_start = datetime.combine(date_val, datetime.min.time())
+    day_end = datetime.combine(date_val, datetime.max.time())
+
     # Get counts
-    plant_count = await plants.count_documents({"user_id": user_id_obj})
-    tm_count = await transit_mixers.count_documents({"user_id": user_id_obj, "status": "active"})
-    client_count = await clients.count_documents({"user_id": user_id_obj})
-    pump_count = await pumps.count_documents({"user_id": user_id_obj, "status": "active"})
-    
-    # Get orders scheduled for today
-    today = datetime.now().date()
-    today_start = datetime.combine(today, datetime.min.time())
-    today_end = datetime.combine(today, datetime.max.time())
-    
-    today_orders = await schedules.count_documents({
-        "user_id": user_id_obj,
-        "schedule_date": {
-            "$gte": today_start,
-            "$lte": today_end
+    all_plants, all_tms, all_pumps, schedules_in_date = await asyncio.gather(
+        get_all_plants(user_id),
+        get_all_tms(user_id),
+        get_all_pumps(user_id),
+        schedules.find({
+            "user_id": ObjectId(user_id_obj),
+            "status": "generated",
+            "input_params.schedule_date": date_val.isoformat()
+        }).sort("created_at", DESCENDING).to_list(length=None)
+    )
+
+    active_plants_count, inactive_plants_count = 0, 0
+    plant_table = {}
+    for plant in all_plants:
+        plant = plant.model_dump()
+        if plant.get("status", "active") == "active":
+            active_plants_count += 1
+        else:
+            inactive_plants_count += 1
+
+        plant_table[str(plant.get("id"))] = {
+            "plant_name": plant.get("name", "Unknown Plant"),
+            "pump_volume": 0,
+            "pump_jobs": set(),
+            "supply_volume": 0,
+            "supply_jobs": set(),
+            "tm_used": 0,
+            "tm_used_total_hours": 0,
+            "line_pump_used": 0,
+            "line_pump_used_total_hours": 0,
+            "boom_pump_used": 0,
+            "boom_pump_used_total_hours": 0,
+            "tm_active_but_not_used": 0,
+            "line_pump_active_but_not_used": 0,
+            "boom_pump_active_but_not_used": 0
         }
-    })
     
+    active_tms_count, inactive_tms_count = 0, 0
+    tm_map = {}
+    for tm in all_tms:
+        tm = tm.model_dump()
+        if tm.get("status", "active") == "active":
+            active_tms_count += 1
+        else:
+            inactive_tms_count += 1
+        tm_map[str(tm.get("id"))] = {**tm, "seen": False}
+
+    active_line_pumps_count, inactive_line_pumps_count, active_boom_pumps_count, inactive_boom_pumps_count = 0, 0, 0, 0
+    pump_map = {}
+    for pump in all_pumps:
+        pump = pump.model_dump()
+        if pump.get("status", "active") == "active":
+            if pump.get("type") == "line":
+                active_line_pumps_count += 1
+            elif pump.get("type") == "boom":
+                active_boom_pumps_count += 1
+        else:
+            if pump.get("type") == "line":
+                inactive_line_pumps_count += 1
+            elif pump.get("type") == "boom":
+                inactive_boom_pumps_count += 1
+        pump_map[str(pump.get("id"))] = {**pump, "seen": False}
+
+    for schedule in schedules_in_date:
+        schedule_type = "pump_jobs" if schedule.get("schedule_type", "pump") == "pump" else "supply_jobs"
+
+        # Find the earliest pump_start and latest return in output_table
+        trips = schedule.get("output_table", [])
+        if not trips:
+            continue
+        start_time = trips[0].get("pump_start")
+        end_time = trips[-1].get("unloading_time")
+        if not start_time or not end_time:
+            continue
+        pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
+        pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
+        pump_removal_time = schedule.get("input_params", {}).get("pump_removal_time", 0)
+        start_time = _parse_datetime_with_timezone(start_time)
+        end_time = _parse_datetime_with_timezone(end_time)
+        actual_start_time = start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))
+        actual_end_time = end_time + timedelta(minutes=pump_removal_time + pump_onward_time)
+        if actual_start_time == None or actual_end_time == None:
+            continue
+        
+        pump, plant_id_of_pump = None, None
+        if str(schedule.get("pump", None)) in pump_map:
+            pump = pump_map[str(schedule.get("pump"))]
+            plant_id_of_pump = str(pump["plant_id"])
+        if pump and plant_id_of_pump and plant_id_of_pump in plant_table:
+            plant_table[plant_id_of_pump][schedule_type].add(schedule.get("id"))
+            pump_type = "line_pump_used" if pump["type"] == "line" else "boom_pump_used"
+            if pump["seen"] == False:
+                plant_table[plant_id_of_pump][pump_type] += 1
+                pump["seen"] = True
+            plant_table[plant_id_of_pump][f"{pump_type}_total_hours"] += (actual_end_time - actual_start_time).total_seconds() / 3600
+
+        tm_usage_in_schedule = {}
+        for trip in schedule.get("output_table", []):
+            tm, plant_id_of_tm = None, None
+            tm_id = str(trip.get("tm_id", None))
+            if tm_id in tm_map:
+                tm = tm_map[tm_id]
+                plant_id_of_tm = str(tm["plant_id"])
+            if tm and plant_id_of_tm and plant_id_of_tm in plant_table:
+                plant_table[plant_id_of_tm][schedule_type].add(schedule.get("id"))
+                if tm["seen"] == False:
+                    plant_table[plant_id_of_tm]["tm_used"] += 1
+                    tm["seen"] = True
+                if trip.get("completed_capacity", 0):
+                    plant_table[plant_id_of_tm]["pump_volume"] += trip.get("completed_capacity", 0)
+                if trip.get("plant_buffer", None) is None or trip.get("return", None) is None:
+                    continue
+                if tm_id not in tm_usage_in_schedule:
+                    tm_usage_in_schedule[tm_id] = {"start": trip.get("plant_buffer"), "end": trip.get("return"), "schedule_no": schedule.get("schedule_no", "")}
+                    continue
+                tm_usage_in_schedule[tm_id]["start"] = min(tm_usage_in_schedule[tm_id]["start"], trip.get("plant_buffer"))
+                tm_usage_in_schedule[tm_id]["end"] = max(tm_usage_in_schedule[tm_id]["end"], trip.get("return"))
+        for tm_id in tm_usage_in_schedule.keys():
+            plant_table[plant_id_of_tm]["tm_used_total_hours"] += ( _parse_datetime_with_timezone(tm_usage_in_schedule[tm_id]["end"]) - _parse_datetime_with_timezone(tm_usage_in_schedule[tm_id]["start"]) ).total_seconds() / 3600
+
     # Calculate monthly statistics for the past 12 months
     monthly_stats = await get_monthly_stats(user_id_obj)
 
@@ -37,11 +149,15 @@ async def get_dashboard_stats(user_id: str) -> Dict[str, Any]:
     # Format the response according to the required structure
     return {
         "counts": {
-            "plants": plant_count,
-            "transit_mixers": tm_count,
-            "clients": client_count,
-            "pumps": pump_count,
-            "orders_today": today_orders
+            "active_plants_count": active_plants_count,
+            "inactive_plants_count": inactive_plants_count,
+            "active_tms_count": active_tms_count,
+            "inactive_tms_count": inactive_tms_count,
+            "active_line_pumps_count": active_line_pumps_count,
+            "inactive_line_pumps_count": inactive_line_pumps_count,
+            "active_boom_pumps_count": active_boom_pumps_count,
+            "inactive_boom_pumps_count": inactive_boom_pumps_count,
+            "plants_table": plant_table
         },
         "series": [
             {
