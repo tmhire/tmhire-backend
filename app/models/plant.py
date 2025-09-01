@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from typing import Literal, Optional
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 
@@ -16,6 +16,7 @@ class PlantModel(BaseModel):
     contact_number1: Optional[str] = None
     contact_name2: Optional[str] = None
     contact_number2: Optional[str] = None
+    status: Literal["active", "inactive"] = Field(default="active")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -33,6 +34,7 @@ class PlantModel(BaseModel):
                 "contact_number1":"9876543210",
                 "contact_name2":"Jane Smith",
                 "contact_number2": "1234567890",
+                "status": "active"
             }
         }
     )
@@ -47,6 +49,7 @@ class PlantCreate(BaseModel):
     contact_number1: Optional[str] = None
     contact_name2: Optional[str] = None
     contact_number2: Optional[str] = None
+    status: Literal["active", "inactive"] = Field(default="active")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -60,6 +63,7 @@ class PlantCreate(BaseModel):
                 "contact_number1":"9876543210",
                 "contact_name2":"Jane Smith",
                 "contact_number2": "1234567890",
+                "status": "active"
             }
         }
     )
@@ -74,6 +78,7 @@ class PlantUpdate(BaseModel):
     contact_number1: Optional[str] = None
     contact_name2: Optional[str] = None
     contact_number2: Optional[str] = None
+    status: Literal["active", "inactive"] = Field(default="active")
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -87,6 +92,7 @@ class PlantUpdate(BaseModel):
                 "contact_number1":"9876543210",
                 "contact_name2":"Jane Smith",
                 "contact_number2": "1234567890",
+                "status": "active"
             }
         }
     ) 

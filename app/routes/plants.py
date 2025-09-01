@@ -104,4 +104,36 @@ async def read_plant_transit_mixers(
         success=True,
         message="Plant transit mixers retrieved successfully",
         data=result
-    ) 
+    )
+
+@router.put("/{plant_id}/status", response_model=StandardResponse[PlantModel])
+async def update_plant_status(
+    plant_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Update the status of a plant.
+    
+    Path parameter:
+    - plant_id: The ID of the plant to update
+
+    Returns the updated plant details.
+    """
+    plant = await get_plant(plant_id, str(current_user.id))
+    if not plant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plant not found"
+        )
+    current_status = plant.status
+    if current_status == "active":
+        new_status = "inactive"
+    else:
+        new_status = "active"
+    plant.status = new_status
+    updated_plant = await update_plant(plant_id, plant, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Transit mixer status updated successfully",
+        data=updated_plant
+    )
