@@ -100,6 +100,8 @@ class ScheduleModel(BaseModel):
     tm_count: Optional[int] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
+    mix_code: Optional[str] = None
+    remarks: Optional[str] = None
     floor_height: Optional[int] = None
     slump_at_site: Optional[float] = 0.0
     mother_plant_km: Optional[float] = 0.0
@@ -148,6 +150,8 @@ class ScheduleModel(BaseModel):
                 "tm_count": 6,
                 "concreteGrade": 25,
                 "pumping_job": "Road",
+                "mix_code": "Some random alphanumeric",
+                "remarks": "Some random alphanumeric",
                 "floor_height": 10,
                 "slump_at_site": 0.0,
                 "mother_plant_km": 0.0,
@@ -198,6 +202,8 @@ class ScheduleCreate(BaseModel):
     site_address: Optional[str] = None
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
+    mix_code: Optional[str] = None
+    remarks: Optional[str] = None
     floor_height: Optional[int] = None
     slump_at_site: Optional[float] = 0.0
     mother_plant_km: Optional[float] = 0.0
@@ -223,6 +229,8 @@ class ScheduleCreate(BaseModel):
                 "site_address": "Chennai Main Road Site",
                 "concreteGrade": 25,
                 "pumping_job": "Road",
+                "mix_code": "Some random alphanumeric",
+                "remarks": "Some random alphanumeric",
                 "floor_height": 10,
                 "slump_at_site": 0.0,
                 "mother_plant_km": 0.0,
@@ -269,6 +277,8 @@ class ScheduleUpdate(BaseModel):
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
     concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
+    mix_code: Optional[str] = None
+    remarks: Optional[str] = None
     floor_height: Optional[int] = None
     slump_at_site: Optional[float] = 0.0
     mother_plant_km: Optional[float] = 0.0
@@ -307,6 +317,8 @@ class ScheduleUpdate(BaseModel):
                 "pumping_speed": 35,
                 "concreteGrade": 30,
                 "pumping_job": "Road",
+                "mix_code": "Some random alphanumeric",
+                "remarks": "Some random alphanumeric",
                 "floor_height": 12,
                 "slump_at_site": 0.0,
                 "mother_plant_km": 0.0,
