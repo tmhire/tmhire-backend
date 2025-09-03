@@ -70,7 +70,7 @@ async def update_user_data(user_id: str, user: UserUpdate):
     existing_user = (await get_user(user_id)).model_dump()
     isNewUser = True
     if all(
-        key in existing_user and existing_user[key] is not None
+        (key in existing_user and existing_user[key] is not None) or (key in user_data and user_data[key] is not None)
         for key in ["contact", "company", "city"]
     ):
         isNewUser = False
