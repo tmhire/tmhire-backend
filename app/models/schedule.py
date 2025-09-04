@@ -98,7 +98,7 @@ class ScheduleModel(BaseModel):
     input_params: InputParams
     output_table: Optional[List[Trip]] = Field(default_factory=list)
     tm_count: Optional[int] = None
-    concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    concreteGrade: Optional[Union[int | str]] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     mix_code: Optional[str] = None
     remarks: Optional[str] = None
@@ -200,7 +200,7 @@ class ScheduleCreate(BaseModel):
     # pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
-    concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    concreteGrade: Optional[Union[int | str]] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     mix_code: Optional[str] = None
     remarks: Optional[str] = None
@@ -275,7 +275,7 @@ class ScheduleUpdate(BaseModel):
     pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
-    concreteGrade: Optional[int] = None  # e.g., M20, M25, etc.
+    concreteGrade: Optional[Union[int | str]] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     mix_code: Optional[str] = None
     remarks: Optional[str] = None
