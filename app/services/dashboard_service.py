@@ -97,7 +97,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         pump_map[str(pump.get("id"))] = {**pump, "seen": False}
 
     for schedule in schedules_in_date:
-        schedule_type = "pump" if schedule.get("schedule_type", "pump") == "pump" else "supply"
+        schedule_type = "pump" if schedule.get("type", "pump") == "pump" else "supply"
 
         # Find the earliest pump_start and latest return in output_table
         trips = schedule.get("output_table", [])
