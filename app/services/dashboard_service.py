@@ -97,7 +97,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         pump_map[str(pump.get("id"))] = {**pump, "seen": False}
 
     for schedule in schedules_in_date:
-        schedule_type = "pump_jobs" if schedule.get("schedule_type", "pump") == "pump" else "supply_jobs"
+        schedule_type = "pump" if schedule.get("schedule_type", "pump") == "pump" else "supply"
 
         # Find the earliest pump_start and latest return in output_table
         trips = schedule.get("output_table", [])
@@ -125,14 +125,16 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
             pump = pump_map[str(schedule.get("pump"))]
             plant_id_of_pump = str(pump["plant_id"])
         if pump and plant_id_of_pump and plant_id_of_pump in plant_table:
-            plant_table[plant_id_of_pump][schedule_type].add(schedule.get("id"))
+            plant_table[plant_id_of_pump][f"{schedule_type}_jobs"].add(str(schedule.get("_id")))
             pump_type = "line_pump_used" if pump["type"] == "line" else "boom_pump_used"
             if pump["seen"] == False:
                 plant_table[plant_id_of_pump][pump_type] += 1
                 pump["seen"] = True
+            print(pump['identifier'], pump["id"], (actual_end_time - actual_start_time).total_seconds() / 3600 )
             plant_table[plant_id_of_pump][f"{pump_type}_total_hours"] += (actual_end_time - actual_start_time).total_seconds() / 3600
 
         tm_usage_in_schedule = {}
+        completed_capacity = 0
         for trip in trips:
             tm, plant_id_of_tm = None, None
             tm_id = str(trip.get("tm_id", None))
@@ -140,12 +142,13 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
                 tm = tm_map[tm_id]
                 plant_id_of_tm = str(tm["plant_id"])
             if tm and plant_id_of_tm and plant_id_of_tm in plant_table:
-                plant_table[plant_id_of_tm][schedule_type].add(schedule.get("id"))
+                plant_table[plant_id_of_tm][f"{schedule_type}_jobs"].add(str(schedule.get("_id")))
                 if tm["seen"] == False:
                     plant_table[plant_id_of_tm]["tm_used"] += 1
                     tm["seen"] = True
                 if trip.get("completed_capacity", 0):
-                    plant_table[plant_id_of_tm]["pump_volume"] += trip.get("completed_capacity", 0)
+                    plant_table[plant_id_of_tm][f"{schedule_type}_volume"] += trip.get("completed_capacity", 0) - completed_capacity
+                    completed_capacity = trip.get("completed_capacity", 0)
                 if trip.get("plant_buffer", None) is None or trip.get("return", None) is None:
                     continue
                 if tm_id not in tm_usage_in_schedule:
@@ -154,6 +157,8 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
                 tm_usage_in_schedule[tm_id]["start"] = min(tm_usage_in_schedule[tm_id]["start"], trip.get("plant_buffer"))
                 tm_usage_in_schedule[tm_id]["end"] = max(tm_usage_in_schedule[tm_id]["end"], trip.get("return"))
         for tm_id in tm_usage_in_schedule.keys():
+            tm = tm_map[tm_id]
+            plant_id_of_tm = str(tm["plant_id"])
             plant_table[plant_id_of_tm]["tm_used_total_hours"] += ( _parse_datetime_with_timezone(tm_usage_in_schedule[tm_id]["end"]) - _parse_datetime_with_timezone(tm_usage_in_schedule[tm_id]["start"]) ).total_seconds() / 3600
         
     # Count active but not used TMs and Pumps
@@ -191,8 +196,8 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
             "inactive_line_pumps_count": inactive_line_pumps_count,
             "active_boom_pumps_count": active_boom_pumps_count,
             "inactive_boom_pumps_count": inactive_boom_pumps_count,
-            "plants_table": plant_table
         },
+        "plants_table": plant_table,
         "series": [
             {
                 "name": "Pumping quantity",
