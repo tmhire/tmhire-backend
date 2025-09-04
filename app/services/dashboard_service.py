@@ -97,7 +97,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         pump_map[str(pump.get("id"))] = {**pump, "seen": False}
 
     for schedule in schedules_in_date:
-        schedule_type = "pump" if schedule.get("type", "pump") == "pump" else "supply"
+        schedule_type = "pump" if schedule.get("type", "pumping") == "pumping" else "supply"
 
         # Find the earliest pump_start and latest return in output_table
         trips = schedule.get("output_table", [])
@@ -107,7 +107,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         start_time = trips[0].get("pump_start")
         end_time = trips[-1].get("unloading_time")
         if not start_time or not end_time:
-            print("no start and end time", start_time, end_time)
+            print("No start and end time", start_time, end_time)
             continue
         pump_onward_time = schedule.get("input_params", {}).get("pump_onward_time", 0)
         pump_fixing_time = schedule.get("input_params", {}).get("pump_fixing_time", 0)
@@ -117,7 +117,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         actual_start_time = start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))
         actual_end_time = end_time + timedelta(minutes=pump_removal_time + pump_onward_time)
         if actual_start_time == None or actual_end_time == None:
-            print("no actual start and end time", actual_start_time, actual_end_time)
+            print("No actual start and end time", actual_start_time, actual_end_time)
             continue
         
         pump, plant_id_of_pump = None, None
@@ -130,7 +130,6 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
             if pump["seen"] == False:
                 plant_table[plant_id_of_pump][pump_type] += 1
                 pump["seen"] = True
-            print(pump['identifier'], pump["id"], (actual_end_time - actual_start_time).total_seconds() / 3600 )
             plant_table[plant_id_of_pump][f"{pump_type}_total_hours"] += (actual_end_time - actual_start_time).total_seconds() / 3600
 
         tm_usage_in_schedule = {}
