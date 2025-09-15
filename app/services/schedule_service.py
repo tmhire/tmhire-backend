@@ -532,7 +532,7 @@ async def check_tm_availability(schedule_date: date, selected_tms: List[str], us
         "unavailable_tms": unavailable_tms
     }
 
-async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, user_id: str, type: str, partially_available_tm: Dict[str, AvailabilityBody]) -> ScheduleModel:
+async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, user_id: str, type: str, partially_available_tm: Dict[str, AvailabilityBody], partially_available_pump: AvailabilityBody) -> ScheduleModel:
     """Generate the schedule based on selected Transit Mixers with single pump constraint."""
     schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
     if not schedule:
@@ -606,6 +606,8 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     buffer_time = schedule["input_params"]["buffer_time"]
     load_time = schedule["input_params"]["load_time"]
     unloading_time = schedule["input_params"]["unloading_time"]
+    pump_onward_time = schedule["input_params"]["pump_onward_time"]
+    pump_fixing_time = schedule["input_params"]["pump_fixing_time"]
 
     trips = []
     total_quantity = schedule["input_params"]["quantity"]
@@ -619,6 +621,12 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     tm_available_times = {tm: datetime.combine(schedule_date, time.min) for tm in selected_tms}
     
     pump_available_time = base_time  # pump is free at this time
+    if type == "pumping":
+        if pump_id and partially_available_pump:
+            pump_end = _convert_to_datetime(partially_available_pump.end)
+            print("Here ", pump_end, partially_available_pump.end, partially_available_pump)
+            if pump_end and pump_end - pump_available_time <= timedelta(hours=1):
+                pump_available_time = pump_end + timedelta(minutes = 1 + pump_onward_time + pump_fixing_time)
     
     # Maximum time to wait for a previously used TM before using a different one (in minutes)
     max_wait_time = 15

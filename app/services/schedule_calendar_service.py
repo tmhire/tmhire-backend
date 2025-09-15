@@ -1,4 +1,4 @@
-from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, pumps
+from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, pumps, projects
 from app.models.schedule_calendar import DailySchedule, GanttPump, GanttResponse, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask
 from app.models.schedule import ScheduleModel
 from datetime import datetime, date, time, timedelta, timezone
@@ -678,14 +678,16 @@ async def get_gantt_data(
     ]
     }
 
-    all_tms, all_pumps, queried_schedules, all_plants = await asyncio.gather(
+    all_tms, all_pumps, queried_schedules, all_plants, all_projects = await asyncio.gather(
         transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
         pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
         schedules.find(schedule_query).to_list(length=None),
-        plants.find({"user_id": ObjectId(user_id)}).to_list(length=None)
+        plants.find({"user_id": ObjectId(user_id)}).to_list(length=None),
+        projects.find({"user_id": ObjectId(user_id)}).to_list(length=None)
     )
 
     plant_map = {str(plant["_id"]): plant for plant in all_plants}
+    project_map = {str(proj["_id"]): proj for proj in all_projects}
     
     # Get all TMs first
     tm_map: GanttMixer = {}
@@ -725,7 +727,9 @@ async def get_gantt_data(
     for schedule in queried_schedules:
         schedule_count += 1
         
+        schedule_no = schedule.get("schedule_no", "Schedule Number not set")
         client_name = schedule.get("client_name")
+        project_name = project_map[str(schedule.get("project_id"))].get("name", "Unknown Project")
         schedule_id = str(schedule["_id"])
 
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0)
@@ -776,7 +780,9 @@ async def get_gantt_data(
                         id=task_id,
                         start=plant_buffer_dt,
                         end=plant_load_dt,
-                        client=client_name
+                        client=client_name,
+                        project=project_name,
+                        schedule_no=schedule_no
                     ))
                     task_count += 1
                 # Load
@@ -786,7 +792,9 @@ async def get_gantt_data(
                         id=task_id,
                         start=plant_load_dt,
                         end=plant_start_dt,
-                        client=client_name
+                        client=client_name,
+                        project=project_name,
+                        schedule_no=schedule_no
                     ))
                     task_count += 1
                 # Onward
@@ -796,7 +804,9 @@ async def get_gantt_data(
                         id=task_id,
                         start=plant_start_dt,
                         end=pump_start_dt,
-                        client=client_name
+                        client=client_name,
+                        project=project_name,
+                        schedule_no=schedule_no
                     ))
                     task_count += 1
                 # Work
@@ -806,7 +816,9 @@ async def get_gantt_data(
                         id=task_id,
                         start=pump_start_dt,
                         end=unloading_time_dt,
-                        client=client_name
+                        client=client_name,
+                        project=project_name,
+                        schedule_no=schedule_no
                     ))
                     task_count += 1
                 # Return
@@ -816,7 +828,9 @@ async def get_gantt_data(
                         id=task_id,
                         start=unloading_time_dt,
                         end=return_time_dt,
-                        client=client_name
+                        client=client_name,
+                        project=project_name,
+                        schedule_no=schedule_no
                     ))
                     task_count += 1
                 # Cushion (gap to next trip)
@@ -830,7 +844,9 @@ async def get_gantt_data(
                             id=task_id,
                             start=return_time_dt,
                             end=next_plant_buffer_dt,
-                            client=client_name
+                            client=client_name,
+                            project=project_name,
+                            schedule_no=schedule_no
                         ))
                         task_count += 1
         
@@ -862,7 +878,9 @@ async def get_gantt_data(
                 id=f"onward-{schedule_id}-{pump_id}",
                 start=(start_time - timedelta(minutes=(pump_onward_time + pump_fixing_time))),
                 end=(start_time - timedelta(minutes=pump_fixing_time)),
-                client=client_name
+                client=client_name,
+                project=project_name,
+                schedule_no=schedule_no
             )
             pump_map[pump_id].tasks.append(task)
             
@@ -870,7 +888,9 @@ async def get_gantt_data(
                 id=f"fixing-{schedule_id}-{pump_id}",
                 start=(start_time - timedelta(minutes=pump_fixing_time)),
                 end=start_time,
-                client=client_name
+                client=client_name,
+                project=project_name,
+                schedule_no=schedule_no
             )
             pump_map[pump_id].tasks.append(task)
 
@@ -879,7 +899,9 @@ async def get_gantt_data(
             id=f"work-{schedule_id}-{pump_id}",
             start=start_time,
             end=end_time,
-            client=client_name
+            client=client_name,
+            project=project_name,
+            schedule_no=schedule_no
         )
         pump_map[pump_id].tasks.append(task)
 
@@ -888,7 +910,9 @@ async def get_gantt_data(
                 id=f"removal-{schedule_id}-{pump_id}",
                 start=end_time,
                 end=(end_time + timedelta(minutes=pump_removal_time)),
-                client=client_name
+                client=client_name,
+                project=project_name,
+                schedule_no=schedule_no
             )
             pump_map[pump_id].tasks.append(task)
         
@@ -897,7 +921,9 @@ async def get_gantt_data(
                 id=f"return-{schedule_id}-{pump_id}",
                 start=(end_time + timedelta(minutes=pump_removal_time)),
                 end=(end_time + timedelta(minutes=pump_removal_time + pump_onward_time)),
-                client=client_name
+                client=client_name,
+                project=project_name,
+                schedule_no=schedule_no
             )
             pump_map[pump_id].tasks.append(task)
     

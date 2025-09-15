@@ -63,6 +63,8 @@ class GanttTask(BaseModel):
     start: str | datetime # Start time in IST format
     end: str | datetime # End time in IST format
     client: Optional[str] = None
+    project: Optional[str] = None
+    schedule_no: Optional[str] = None
 
 class GanttMixer(BaseModel):
     """Represents a mixer in the Gantt chart"""
