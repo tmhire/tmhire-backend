@@ -51,17 +51,24 @@ async def update_client(id: str, client: ClientUpdate, user_id: str) -> Optional
 
 async def delete_client(id: str, user_id: str) -> Dict[str, bool]:
     """Delete a client and check for dependencies"""
-    # Check if this client has any associated schedules
-    has_schedules = await schedules.find_one({
+    # First check if this client has any projects
+    project = await projects.find_one({
         "user_id": ObjectId(user_id),
         "client_id": ObjectId(id)
     })
-    
-    if has_schedules:
-        return {
-            "success": False,
-            "message": "Cannot delete client with associated schedules"
-        }
+
+    if project:
+        # Then check if any of these projects have schedules
+        has_schedules = await schedules.find_one({
+            "user_id": ObjectId(user_id),
+            "project_id": project["_id"]
+        })
+        
+        if has_schedules:
+            return {
+                "success": False,
+                "message": "Cannot delete client with associated schedules"
+            }
     
     # Delete the client if no dependencies
     result = await clients.delete_one({
@@ -81,8 +88,23 @@ async def get_client_schedules(id: str, user_id: str) -> Dict:
         return {"client": None, "schedules": []}
     
     schedule_list = []
-    async for project in projects.find({"client_id": ObjectId(id), "user_id": ObjectId(user_id)}):
-        async for schedule in schedules.find({"project_id": ObjectId(project["_id"]), "user_id": ObjectId(user_id)}):
+    # First get all projects for this client
+    project_cursor = projects.find({
+        "client_id": ObjectId(id),
+        "user_id": ObjectId(user_id)
+    })
+    
+    project_ids = []
+    async for project in project_cursor:
+        project_ids.append(project["_id"])
+    
+    # Then get all schedules for these projects
+    if project_ids:
+        schedule_cursor = schedules.find({
+            "project_id": {"$in": project_ids},
+            "user_id": ObjectId(user_id)
+        })
+        async for schedule in schedule_cursor:
             schedule_list.append(schedule)
     
     return {
@@ -105,7 +127,7 @@ async def get_client_stats(id: str, user_id: str) -> Dict[str, Any]:
     trips = []
     
     # Query for all schedules for this client
-    async for schedule in all_schedules:
+    for schedule in all_schedules:
         # Sum up scheduled volume from input parameters
         input_params = schedule.get("input_params", {})
         quantity = input_params.get("quantity", 0)
@@ -166,7 +188,7 @@ async def get_client_stats(id: str, user_id: str) -> Dict[str, Any]:
     trips = trips[:10]
     
     return {
-        "client_id": client.name,
+        "client_id": client["name"],
         "total_scheduled": f"{total_scheduled} m³",
         "total_delivered": f"{total_delivered} m³",
         "pending_volume": f"{pending_volume} m³",

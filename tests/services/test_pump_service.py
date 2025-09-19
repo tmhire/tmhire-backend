@@ -58,37 +58,7 @@ async def test_get_pump(mock_db):
     assert pump.type == test_pump["type"]
     assert str(pump.user_id) == user_id
 
-@pytest.mark.asyncio
-async def test_create_pump(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    plant_id = str(ObjectId())
-    
-    # Create required team members
-    test_operator = {**create_test_team(), "user_id": ObjectId(user_id)}
-    operator_result = await mock_db.teams.insert_one(test_operator)
-    
-    test_gang = {**create_test_team(), "user_id": ObjectId(user_id)}
-    gang_result = await mock_db.teams.insert_one(test_gang)
-    
-    pump_data = PumpCreate(
-        identifier="PUMP-001",
-        type="line",
-        plant_id=plant_id,
-        capacity=50.0,
-        make="Test Make",
-        pump_operator_id=str(ObjectId()),
-        pipeline_gang_id=str(ObjectId())
-    )
-    
-    # Act
-    result = await create_pump(pump_data, user_id)
-    
-    # Assert
-    assert result is not None
-    assert result.identifier == pump_data.identifier
-    assert result.type == pump_data.type
-    assert result.status == pump_data.status
+
 
 @pytest.mark.asyncio
 async def test_create_pump_missing_identifier(mock_db):

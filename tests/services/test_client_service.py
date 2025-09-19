@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 from app.services.client_service import (
     get_all_clients,
@@ -17,9 +17,22 @@ from tests.utils.test_fixtures import create_test_client
 async def test_get_all_clients(mock_db):
     # Arrange
     user_id = str(ObjectId())
-    test_client1 = {**create_test_client(), "user_id": ObjectId(user_id)}
-    test_client2 = {**create_test_client(), "user_id": ObjectId(user_id), "name": "Test Client 2"}
-    await mock_db.clients.insert_many([test_client1, test_client2])
+    created_time = datetime.utcnow()
+    # First client created one hour ago
+    first_client = {
+        **create_test_client(),
+        "user_id": ObjectId(user_id),
+        "created_at": created_time - timedelta(hours=1)
+    }
+    # Second client created just now
+    second_client = {
+        **create_test_client(),
+        "user_id": ObjectId(user_id),
+        "name": "Test Client 2",
+        "created_at": created_time
+    }
+    await mock_db.clients.insert_one(first_client)
+    await mock_db.clients.insert_one(second_client)
     
     # Act
     result = await get_all_clients(user_id)
@@ -43,7 +56,7 @@ async def test_get_client(mock_db):
     # Assert
     assert client is not None
     assert client.name == test_client["name"]
-    assert client.email == test_client["email"]
+    assert client.legal_entity == test_client["legal_entity"]
     assert str(client.user_id) == user_id
 
 @pytest.mark.asyncio
@@ -64,9 +77,7 @@ async def test_create_client(mock_db):
     user_id = str(ObjectId())
     client_data = ClientCreate(
         name="New Client",
-        email="newclient@example.com",
-        phone="1234567890",
-        address="New Address"
+        legal_entity="New Legal Entity"
     )
     
     # Act
@@ -75,8 +86,7 @@ async def test_create_client(mock_db):
     # Assert
     assert result is not None
     assert result.name == client_data.name
-    assert result.email == client_data.email
-    assert result.phone == client_data.phone
+    assert result.legal_entity == client_data.legal_entity
     assert str(result.user_id) == user_id
 
 @pytest.mark.asyncio
@@ -89,7 +99,7 @@ async def test_update_client(mock_db):
     
     update_data = ClientUpdate(
         name="Updated Client",
-        phone="9876543210"
+        legal_entity="Updated Legal Entity"
     )
     
     # Act
@@ -97,8 +107,7 @@ async def test_update_client(mock_db):
     
     # Assert
     assert updated_client.name == update_data.name
-    assert updated_client.phone == update_data.phone
-    assert updated_client.email == test_client["email"]  # Unchanged field
+    assert updated_client.legal_entity == update_data.legal_entity
 
 @pytest.mark.asyncio
 async def test_delete_client_with_no_schedules(mock_db):
@@ -123,11 +132,19 @@ async def test_delete_client_with_schedules(mock_db):
     test_client = {**create_test_client(), "user_id": ObjectId(user_id)}
     client_result = await mock_db.clients.insert_one(test_client)
     client_id = str(client_result.inserted_id)
-    
-    # Create a schedule for this client
-    await mock_db.schedules.insert_one({
+
+    # Create a project for this client
+    project = {
         "user_id": ObjectId(user_id),
         "client_id": ObjectId(client_id),
+        "name": "Test Project"
+    }
+    project_result = await mock_db.projects.insert_one(project)
+    
+    # Create a schedule for this project
+    await mock_db.schedules.insert_one({
+        "user_id": ObjectId(user_id),
+        "project_id": project_result.inserted_id,
         "date": datetime.utcnow()
     })
     
@@ -136,6 +153,7 @@ async def test_delete_client_with_schedules(mock_db):
     
     # Assert
     assert result["success"] is False
+    assert result["message"] == "Cannot delete client with associated schedules"
     assert result["message"] == "Cannot delete client with associated schedules"
     assert await mock_db.clients.find_one({"_id": ObjectId(client_id)}) is not None
 
@@ -178,6 +196,37 @@ async def test_get_client_stats(mock_db):
     test_client = {**create_test_client(), "user_id": ObjectId(user_id)}
     client_result = await mock_db.clients.insert_one(test_client)
     client_id = str(client_result.inserted_id)
+    
+    # Create a project and schedule for this client
+    project = {
+        "user_id": ObjectId(user_id),
+        "client_id": ObjectId(client_id),
+        "name": "Test Project"
+    }
+    project_result = await mock_db.projects.insert_one(project)
+    
+    schedule = {
+        "user_id": ObjectId(user_id),
+        "project_id": project_result.inserted_id,
+        "input_params": {
+            "quantity": 100  # 100 m³
+        },
+        "output_table": [
+            {
+                "plant_start": datetime.utcnow(),
+                "tm_id": str(ObjectId()),
+                "completed_capacity": 50
+            },
+            {
+                "plant_start": datetime.utcnow(),
+                "tm_id": str(ObjectId()),
+                "completed_capacity": 100
+            }
+        ],
+        "status": "completed",
+        "date": datetime.utcnow()
+    }
+    await mock_db.schedules.insert_one(schedule)
     
     # Act
     result = await get_client_stats(client_id, user_id)

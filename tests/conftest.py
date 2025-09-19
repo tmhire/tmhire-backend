@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import contextlib
 from mongomock_motor import AsyncMongoMockClient
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi.testclient import TestClient
@@ -26,11 +27,35 @@ def mock_db(mock_client):
     """Set up database with mock collections."""
     database = mock_client["test_db"]
 
-    # Apply patches
-    with patch('app.services.pump_service.pumps', database.pumps), \
-         patch('app.services.team_service.team', database.team), \
-         patch('app.db.mongodb.pumps', database.pumps), \
-         patch('app.db.mongodb.team', database.team):
+    # Apply patches for all services that use MongoDB collections
+    patches = [
+        ('app.services.auth_service.users', database.users),
+        ('app.services.pump_service.pumps', database.pumps),
+        ('app.services.team_service.team', database.team),
+        ('app.services.client_service.clients', database.clients),
+        ('app.services.client_service.projects', database.projects),
+        ('app.services.client_service.schedules', database.schedules),
+        ('app.services.plant_service.plants', database.plants),
+        ('app.services.project_service.projects', database.projects),
+        ('app.services.schedule_calendar_service.schedule_calendar', database.schedule_calendar),
+        ('app.services.schedule_service.schedules', database.schedules),
+        ('app.services.tm_service.transit_mixers', database.transit_mixers),
+        ('app.db.mongodb.users', database.users),
+        ('app.db.mongodb.pumps', database.pumps),
+        ('app.db.mongodb.team', database.team),
+        ('app.db.mongodb.clients', database.clients),
+        ('app.db.mongodb.plants', database.plants),
+        ('app.db.mongodb.projects', database.projects),
+        ('app.db.mongodb.schedule_calendar', database.schedule_calendar),
+        ('app.db.mongodb.schedules', database.schedules),
+        ('app.db.mongodb.transit_mixers', database.transit_mixers)
+    ]
+    
+    # Create a context manager chain
+    with contextlib.ExitStack() as stack:
+        # Apply all patches
+        for target, replacement in patches:
+            stack.enter_context(patch(target, replacement))
         yield database
 
 @pytest.fixture

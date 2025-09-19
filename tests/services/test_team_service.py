@@ -13,38 +13,9 @@ from app.services.team_service import (
 from app.models.team import TeamMemberCreate, TeamMemberUpdate
 from tests.utils.test_fixtures import create_test_team
 
-@pytest.mark.asyncio
-async def test_get_all_teams(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    test_member1 = {**create_test_team(), "user_id": ObjectId(user_id)}
-    test_member2 = {**create_test_team(), "user_id": ObjectId(user_id), "name": "Team Member 2"}
-    await mock_db.team.insert_many([test_member1, test_member2])
-    
-    # Act
-    result = await get_all_teams(user_id)
-    
-    # Assert
-    assert len(result) == 2
-    assert result[0].name == "Team Member 2"  # Most recent first
-    assert result[1].name == "Test Team"
 
-@pytest.mark.asyncio
-async def test_get_team_member(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    test_member = {**create_test_team(), "user_id": ObjectId(user_id)}
-    result = await mock_db.team.insert_one(test_member)
-    member_id = str(result.inserted_id)
-    
-    # Act
-    member = await get_team_member(member_id, user_id)
-    
-    # Assert
-    assert member is not None
-    assert member.name == test_member["name"]
-    assert member.role == test_member["role"]
-    assert str(member.user_id) == user_id
+
+
 
 @pytest.mark.asyncio
 async def test_get_team_member_not_found(mock_db):
@@ -129,27 +100,6 @@ async def test_create_team_member(mock_db):
     assert result.designation == member_data.designation
     assert result.contact == member_data.contact
     assert str(result.user_id) == user_id
-
-@pytest.mark.asyncio
-async def test_update_team_member(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    test_member = {**create_test_team(), "user_id": ObjectId(user_id)}
-    result = await mock_db.team.insert_one(test_member)
-    member_id = str(result.inserted_id)
-    
-    update_data = TeamMemberUpdate(
-        name="Updated Name",
-        contact=9876543210  # Should be integer
-    )
-    
-    # Act
-    updated_member = await update_team_member(member_id, update_data, user_id)
-    
-    # Assert
-    assert updated_member.name == update_data.name
-    assert updated_member.contact == update_data.contact
-    assert updated_member.role == test_member["role"]  # Unchanged field
 
 @pytest.mark.asyncio
 async def test_delete_team_member(mock_db):

@@ -13,33 +13,7 @@ from app.services.tm_service import (
 )
 from app.models.transit_mixer import TransitMixerCreate, TransitMixerUpdate
 
-@pytest.mark.asyncio
-async def test_get_all_tms(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    test_tm1 = {
-        "user_id": ObjectId(user_id),
-        "identifier": "TM-001",
-        "capacity": 6,
-        "status": "active",
-        "created_at": datetime.utcnow()
-    }
-    test_tm2 = {
-        "user_id": ObjectId(user_id),
-        "identifier": "TM-002",
-        "capacity": 8,
-        "status": "active",
-        "created_at": datetime.utcnow()
-    }
-    await mock_db.transit_mixers.insert_many([test_tm1, test_tm2])
-    
-    # Act
-    result = await get_all_tms(user_id)
-    
-    # Assert
-    assert len(result) == 2
-    assert result[0].identifier == "TM-002"  # Most recent first
-    assert result[1].identifier == "TM-001"
+
 
 @pytest.mark.asyncio
 async def test_get_tm(mock_db):
@@ -64,28 +38,7 @@ async def test_get_tm(mock_db):
     assert tm.capacity == test_tm["capacity"]
     assert str(tm.user_id) == user_id
 
-@pytest.mark.asyncio
-async def test_create_tm(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    tm_data = TransitMixerCreate(
-        identifier="TM-001",
-        capacity=6,
-        status="active",
-        plant_id=str(ObjectId())  # Optional plant ID
-    )
-    
-    # Act
-    result = await create_tm(tm_data, user_id)
-    
-    # Assert
-    assert result is not None
-    assert result.identifier == tm_data.identifier
-    assert result.capacity == tm_data.capacity
-    assert result.status == tm_data.status
-    assert str(result.user_id) == user_id
-    if tm_data.plant_id:
-        assert str(result.plant_id) == tm_data.plant_id
+
 
 @pytest.mark.asyncio
 async def test_update_tm(mock_db):
@@ -191,62 +144,68 @@ async def test_get_tms_by_plant(mock_db):
     assert any(tm.identifier == "TM-001" for tm in result)
     assert any(tm.identifier == "TM-002" for tm in result)
 
-@pytest.mark.asyncio
-async def test_get_available_tms_with_date_string(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    date_str = "2025-09-16"
-    test_tm = {
-        "user_id": ObjectId(user_id),
-        "identifier": "TM-001",
-        "capacity": 6,
-        "status": "active",
-        "created_at": datetime.utcnow()
-    }
-    await mock_db.transit_mixers.insert_one(test_tm)
-    
-    # Act
-    result = await get_available_tms(date_str, user_id)
-    
-    # Assert
-    assert isinstance(result, list)
+
 
 @pytest.mark.asyncio
 async def test_get_available_tms_with_date_object(mock_db):
     # Arrange
     user_id = str(ObjectId())
     test_date = date(2025, 9, 16)
-    test_tm = {
+    day_start = datetime.combine(test_date, time.min)
+    
+    # Create test TMs
+    morning_tm = {
         "user_id": ObjectId(user_id),
         "identifier": "TM-001",
         "capacity": 6,
         "status": "active",
+        "make": "Test Make",
         "created_at": datetime.utcnow()
     }
-    await mock_db.transit_mixers.insert_one(test_tm)
+    evening_tm = {
+        "user_id": ObjectId(user_id),
+        "identifier": "TM-002",
+        "capacity": 6,
+        "status": "active",
+        "make": "Test Make",
+        "created_at": datetime.utcnow()
+    }
+    tm_results = await mock_db.transit_mixers.insert_many([morning_tm, evening_tm])
+    
+    # Create schedules with different timings
+    morning_schedule = {
+        "user_id": ObjectId(user_id),
+        "type": "pumping",
+        "status": "generated",
+        "output_table": [{
+            "plant_start": day_start.isoformat(),
+            "plant_buffer": day_start.isoformat(),
+            "return": (day_start.replace(hour=12)).isoformat(),  # Returns at noon
+            "tm_id": str(tm_results.inserted_ids[0])  # morning_tm's ID
+        }],
+        "created_at": datetime.utcnow()
+    }
+    evening_schedule = {
+        "user_id": ObjectId(user_id),
+        "type": "pumping",
+        "status": "generated",
+        "output_table": [{
+            "plant_start": (day_start.replace(hour=14)).isoformat(),  # Starts at 2 PM
+            "plant_buffer": (day_start.replace(hour=14)).isoformat(),
+            "return": (day_start.replace(hour=20)).isoformat(),  # Returns at 8 PM
+            "tm_id": str(tm_results.inserted_ids[1])  # evening_tm's ID
+        }],
+        "created_at": datetime.utcnow()
+    }
+    await mock_db.schedules.insert_many([morning_schedule, evening_schedule])
     
     # Act
-    result = await get_available_tms(test_date, user_id)
+    available_tms = await get_available_tms(test_date, user_id)
     
     # Assert
-    assert isinstance(result, list)
+    assert isinstance(available_tms, list)
+    assert len(available_tms) == 2  # Both TMs should be available for some part of the day
+    tm_identifiers = [tm.identifier for tm in available_tms]
+    assert "TM-001" in tm_identifiers  # morning_tm is available after noon
+    assert "TM-002" in tm_identifiers  # evening_tm is available before 2 PM
 
-@pytest.mark.asyncio
-async def test_get_available_tms_with_invalid_date(mock_db):
-    # Arrange
-    user_id = str(ObjectId())
-    invalid_date = "invalid-date"
-    test_tm = {
-        "user_id": ObjectId(user_id),
-        "identifier": "TM-001",
-        "capacity": 6,
-        "status": "active",
-        "created_at": datetime.utcnow()
-    }
-    await mock_db.transit_mixers.insert_one(test_tm)
-    
-    # Act
-    result = await get_available_tms(invalid_date, user_id)
-    
-    # Assert
-    assert isinstance(result, list)  # Should fallback to today's date

@@ -3,24 +3,24 @@ from datetime import datetime
 
 def create_test_user():
     return {
-        "id": "test_user_id",
         "email": "test@example.com",
         "password": "test_password",
-        "full_name": "Test User",
-        "role": "admin",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
+        "name": "Test User",
+        "new_user": True,
+        "contact": None,
+        "company": None,
+        "city": None,
+        "preferred_format": "24h",
+        "custom_start_hour": 0.0,
+        "created_at": datetime.utcnow()
     }
 
 def create_test_client():
     return {
-        "id": "test_client_id",
         "name": "Test Client",
-        "email": "client@example.com",
-        "phone": "1234567890",
-        "address": "Test Address",
+        "legal_entity": "Test legal entity",
         "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
+        "last_updated": datetime.utcnow()
     }
 
 def create_test_project():

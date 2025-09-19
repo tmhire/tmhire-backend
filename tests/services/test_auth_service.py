@@ -26,7 +26,7 @@ async def test_get_user_by_email(mock_db):
     # Assert
     assert result is not None
     assert result.email == test_user["email"]
-    assert result.full_name == test_user["full_name"]
+    assert result.name == test_user["name"]
 
 @pytest.mark.asyncio
 async def test_get_user_by_email_not_found(mock_db):
@@ -49,7 +49,7 @@ async def test_get_user(mock_db):
     # Assert
     assert user is not None
     assert user.email == test_user["email"]
-    assert user.full_name == test_user["full_name"]
+    assert user.name == test_user["name"]
 
 @pytest.mark.asyncio
 async def test_get_user_not_found(mock_db):
@@ -63,8 +63,13 @@ async def test_create_user(mock_db):
     user_data = UserCreate(
         email="new@example.com",
         password="testpassword",
-        full_name="New User",
-        role="user"
+        name="New User",
+        new_user=True,
+        contact=None,
+        company=None,
+        city=None,
+        preferred_format="24h",
+        custom_start_hour=0.0
     )
     
     # Act
@@ -73,8 +78,7 @@ async def test_create_user(mock_db):
     # Assert
     assert result is not None
     assert result.email == user_data.email
-    assert result.full_name == user_data.full_name
-    assert result.role == user_data.role
+    assert result.name == user_data.name
     
     # Verify password is hashed
     db_user = await mock_db.users.find_one({"email": user_data.email})
@@ -88,8 +92,13 @@ async def test_create_user_already_exists(mock_db):
     user_data = UserCreate(
         email=test_user["email"],
         password="newpassword",
-        full_name="New Name",
-        role="user"
+        name="New Name",
+        new_user=True,
+        contact=None,
+        company=None,
+        city=None,
+        preferred_format="24h",
+        custom_start_hour=0.0
     )
     
     # Act & Assert
@@ -104,19 +113,24 @@ async def test_update_user_data(mock_db):
     test_user = create_test_user()
     result = await mock_db.users.insert_one(test_user)
     user_id = str(result.inserted_id)
-    
+
     update_data = UserUpdate(
-        full_name="Updated Name",
-        contact="9876543210",
+        name="Updated Name",
+        contact=9876543210,
         company="New Company",
-        city="New City"
+        city="New City",
+        preferred_format="24h",
+        custom_start_hour=0.0
     )
-    
+
     # Act
     updated_user = await update_user_data(user_id, update_data)
-    
+
     # Assert
-    assert updated_user.full_name == update_data.full_name
+    assert updated_user.name == update_data.name
+    assert updated_user.contact == update_data.contact
+    assert updated_user.company == update_data.company
+    assert updated_user.city == update_data.city
     assert updated_user.contact == update_data.contact
     assert updated_user.company == update_data.company
     assert updated_user.city == update_data.city
