@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional, Union
 from datetime import date, datetime
 
 from pydantic import BaseModel
-from app.models.schedule import GenerateScheduleBody, GetScheduleResponse, ScheduleCreate, ScheduleModel, ScheduleType, ScheduleUpdate
+from app.models.schedule import DeleteType, GenerateScheduleBody, GetScheduleResponse, ScheduleCreate, ScheduleModel, ScheduleType, ScheduleUpdate
 from app.models.user import UserModel
 from app.services.schedule_service import (
     get_all_schedules,
@@ -139,10 +139,11 @@ async def update_existing_schedule(
 @router.delete("/{schedule_id}", response_model=StandardResponse, status_code=status.HTTP_200_OK)
 async def delete_existing_schedule(
     schedule_id: str,
+    delete_type: DeleteType = Query(DeleteType.permanent, description="Specify 'permanently' to delete permanently or 'temporarily' to soft delete"),
     current_user: UserModel = Depends(get_current_user)
 ):
     """Delete a schedule by ID"""
-    result = await delete_schedule(schedule_id, str(current_user.id))
+    result = await delete_schedule(schedule_id, delete_type, str(current_user.id))
     if not result["deleted"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

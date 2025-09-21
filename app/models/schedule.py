@@ -77,6 +77,10 @@ class ScheduleType(str, Enum):
     supply = "supply"
     pumping = "pumping"
 
+class DeleteType(str, Enum):
+    permanent = "permanently"
+    temporary = "temporarily"
+
 
 class ScheduleModel(BaseModel):
     schedule_no: str = ""
