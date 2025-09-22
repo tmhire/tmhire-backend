@@ -1,7 +1,7 @@
 import asyncio
 from pymongo import DESCENDING
 from app.db.mongodb import schedules, transit_mixers
-from app.models.schedule import DeleteType, GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip, AvailabilityBody
+from app.models.schedule import Cancelation, DeleteType, GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip, AvailabilityBody
 from app.services.plant_service import get_all_plants, get_plant
 from app.services.project_service import get_all_projects, get_project
 from app.services.pump_service import get_all_pumps
@@ -260,8 +260,29 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
         
     return updated_schedule
 
-async def delete_schedule(id: str, delete_type: DeleteType, user_id: str) -> Dict[str, str | bool]:
-    if delete_type == DeleteType.temporary:
+async def delete_schedule(id: str, delete_type: DeleteType, cancelation: Cancelation,user_id: str) -> Dict[str, str | bool]:
+    if delete_type == DeleteType.cancel:
+        schedule = await schedules.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+        if not schedule:
+            return {"canceled": False, "schedule_id": id}
+        if schedule.get("status", "") == "deleted":
+            return {"canceled": False, "schedule_id": id}
+        result = await schedules.update_one({
+            "_id": ObjectId(id),
+            "user_id": ObjectId(user_id)
+        }, {
+            "$set": {
+                "status": "canceled",
+                "cancelation": cancelation,
+                "last_updated": datetime.utcnow()
+            }
+        })
+        return {
+            "canceled": result.modified_count > 0,
+            "schedule_id": id
+        }
+
+    elif delete_type == DeleteType.temporary:
         schedule = await schedules.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
         if not schedule:
             return {"deleted": False, "schedule_id": id}
@@ -280,6 +301,7 @@ async def delete_schedule(id: str, delete_type: DeleteType, user_id: str) -> Dic
             "deleted": result.modified_count > 0,
             "schedule_id": id
         }
+
     else:
         result = await schedules.delete_one({
             "_id": ObjectId(id),

@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional, Union
 from datetime import date, datetime
 
 from pydantic import BaseModel
-from app.models.schedule import DeleteType, GenerateScheduleBody, GetScheduleResponse, ScheduleCreate, ScheduleModel, ScheduleType, ScheduleUpdate
+from app.models.schedule import CancelReason, Cancelation, CanceledBy, DeleteType, GenerateScheduleBody, GetScheduleResponse, ScheduleCreate, ScheduleModel, ScheduleType, ScheduleUpdate
 from app.models.user import UserModel
 from app.services.schedule_service import (
     get_all_schedules,
@@ -140,11 +140,21 @@ async def update_existing_schedule(
 async def delete_existing_schedule(
     schedule_id: str,
     delete_type: DeleteType = Query(DeleteType.permanent, description="Specify 'permanently' to delete permanently or 'temporarily' to soft delete"),
+    canceled_by: CanceledBy = Query(CanceledBy.client, description="Specify who is canceling: 'client' or 'company'"),
+    cancel_reason: CancelReason = Query(CancelReason.ecl, description="Specify 'permanently' to delete permanently or 'temporarily' to soft delete"),
     current_user: UserModel = Depends(get_current_user)
 ):
+    print(cancel_reason)
     """Delete a schedule by ID"""
-    result = await delete_schedule(schedule_id, delete_type, str(current_user.id))
-    if not result["deleted"]:
+    result = await delete_schedule(
+        id=schedule_id, 
+        delete_type=delete_type, 
+        cancelation={ "canceled_by": canceled_by, "reason": cancel_reason }, 
+        user_id=str(current_user.id)
+    )
+    
+    type = "canceled" if delete_type == DeleteType.cancel else "deleted"
+    if type not in result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Schedule not found"

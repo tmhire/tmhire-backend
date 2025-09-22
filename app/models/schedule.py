@@ -80,7 +80,22 @@ class ScheduleType(str, Enum):
 class DeleteType(str, Enum):
     permanent = "permanently"
     temporary = "temporarily"
+    cancel = "cancelation"
 
+class CanceledBy(str, Enum):
+    client = "Client",
+    company = "Company",
+
+class CancelReason(str, Enum):
+    ecl = "Exceeded Credit Limit",
+    snr = "Site Not Ready",
+    pr = "Price Revision",
+    r = "Rain",
+    o = "Others",
+
+class Cancelation(BaseModel):
+    canceled_by: CanceledBy
+    reason: CancelReason
 
 class ScheduleModel(BaseModel):
     schedule_no: str = ""
@@ -90,6 +105,8 @@ class ScheduleModel(BaseModel):
     project_name: Optional[str] = "Unknown Project"
     client_id: PyObjectId   # Now always required
     client_name: str
+    plant_id: Optional[PyObjectId] = None
+    plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
     mother_plant_name: Optional[str] = "Unknown Plant"
@@ -116,6 +133,7 @@ class ScheduleModel(BaseModel):
     type: Optional[ScheduleType] = "pumping"
     trip_count: Optional[int] = None
     is_round_trip: Optional[bool] = False
+    cancelation: Optional[Cancelation] = None
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -131,6 +149,8 @@ class ScheduleModel(BaseModel):
                 "project_id": "60d5ec9af682fcd81a060e78",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
+                "plant_id": "60d5ec9af682fcd81a060e71",
+                "plant_name": "Plant A",
                 "site_supervisor_id": "60d5ec9af682fcd81a060e74",
                 "site_supervisor_name": "John Doe",
                 "pump": "60d5ec9af682fcd81a060e73",
@@ -196,6 +216,8 @@ class ScheduleCreate(BaseModel):
     project_id: str
     client_id: str  # Now required
     client_name: Optional[str] = None
+    plant_id: Optional[PyObjectId] = None
+    plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
     # pump: Optional[PyObjectId] = None
@@ -223,6 +245,8 @@ class ScheduleCreate(BaseModel):
                 "project_id": "60d5ec9af682fcd81a060e78",
                 "client_id": "60d5ec9af682fcd81a060e70",
                 "client_name": "ABC Constructions",
+                "plant_id": "60d5ec9af682fcd81a060e71",
+                "plant_name": "Plant A",
                 "site_supervisor_id": "60d5ec9af682fcd81a060e74",
                 "site_supervisor_name": "John Doe",
                 "pump_type": "boom",
@@ -265,7 +289,9 @@ class ScheduleUpdate(BaseModel):
     schedule_no: str = ""
     project_id: Optional[str] = None
     client_id: Optional[str] = None  # Now required for update if project_id is updated
-    client_name: Optional[str] = None    
+    client_name: Optional[str] = None
+    plant_id: Optional[PyObjectId] = None
+    plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
     site_address: Optional[str] = None
@@ -292,7 +318,9 @@ class ScheduleUpdate(BaseModel):
             "example": {
                 "project_id": "60d5ec9af682fcd81a060e79",
                 "client_id": "60d5ec9af682fcd81a060e70",
-                "client_name": "XYZ Constructions",                
+                "client_name": "XYZ Constructions",
+                "plant_id": "60d5ec9af682fcd81a060e71",
+                "plant_name": "Plant A",      
                 "site_supervisor_id": "60d5ec9af682fcd81a060e74",
                 "site_supervisor_name": "John Doe",
                 "site_address": "Updated Location",
