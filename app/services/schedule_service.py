@@ -1,7 +1,7 @@
 import asyncio
 from pymongo import DESCENDING
 from app.db.mongodb import schedules, transit_mixers
-from app.models.schedule import Cancelation, DeleteType, GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip, AvailabilityBody
+from app.models.schedule import BurstTrip, Cancelation, DeleteType, GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip, AvailabilityBody
 from app.services.plant_service import get_all_plants, get_plant
 from app.services.project_service import get_all_projects, get_project
 from app.services.pump_service import get_all_pumps
@@ -610,6 +610,301 @@ async def check_tm_availability(schedule_date: date, selected_tms: List[str], us
         "unavailable_tms": unavailable_tms
     }
 
+def pour_schedule(
+        selected_tms: List[str], 
+        input_params: InputParams,
+        type: str,
+        schedule_date: date,
+        base_time: datetime,
+        partially_available_pump: AvailabilityBody,
+        partially_available_tm: Dict[str, AvailabilityBody],
+        tm_map: Dict[str, str],
+        tm_capacities: dict,
+        avg_capacity: float,
+        tripCount: int = None,
+        pump_id: str = None,
+    ) -> List[Trip]:
+    
+    onward_time = input_params.onward_time  # Always use TM onward_time for TM trips
+    return_time = input_params.return_time
+    buffer_time = input_params.buffer_time
+    load_time = input_params.load_time
+    unloading_time = input_params.unloading_time
+    pump_onward_time = input_params.pump_onward_time
+    pump_fixing_time = input_params.pump_fixing_time
+
+    total_quantity = input_params.quantity
+    remaining_quantity = total_quantity
+    completed_quantity = 0  # Track how much has been completed
+    trip_no = 0
+    
+    # Track trip number for each TM
+    tm_trip_counter = {tm: 0 for tm in selected_tms}
+    # Track when each TM becomes available (returns from its last trip)
+    tm_available_times = {}
+    for tm in selected_tms:
+        partially_available_tm_end_time = datetime.min
+        if tm in partially_available_tm:
+            partially_available_tm_end_time = _convert_to_datetime(partially_available_tm[tm].end) + timedelta(minutes=1)
+        
+        if not partially_available_tm_end_time or partially_available_tm_end_time is None:
+            partially_available_tm_end_time = datetime.min
+
+        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
+
+    pump_available_time = base_time  # pump is free at this time
+    if type == "pumping":
+        if pump_id and partially_available_pump:
+            pump_end = _convert_to_datetime(partially_available_pump.end)
+            if pump_end and pump_end - pump_available_time <= timedelta(hours=1):
+                pump_available_time = pump_end + timedelta(minutes = 1 + pump_onward_time + pump_fixing_time)
+
+    trips = []
+    while True:
+        # Stop condition for pumping type
+        if type == "pumping" and completed_quantity >= total_quantity:
+            break
+        # Stop condition for supply type
+        if type == "supply" :
+            totalTrips = tripCount
+            if not totalTrips or totalTrips is None:
+                totalTrips = 1
+            if trip_no >= totalTrips:
+                break
+    
+        trip_no += 1
+        selected_tm = None
+        earliest_effective_site_arrival_for_best_tm = datetime.max 
+
+        target_site_arrival_for_current_trip = unloading_end + timedelta(minutes=1) if trip_no > 1 else pump_available_time
+        if trip_no == 1:
+            print(target_site_arrival_for_current_trip)
+
+        for tm in selected_tms:
+            # Calculate when TM becomes available after buffer and loading time
+            min_tm_departure_time = tm_available_times[tm]
+            # Add buffer and loading time to determine when TM is actually available for next trip
+            tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time+load_time)
+            potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time)
+            effective_site_arrival = max(target_site_arrival_for_current_trip, potential_tm_arrival_time)
+
+            if effective_site_arrival < earliest_effective_site_arrival_for_best_tm:
+                earliest_effective_site_arrival_for_best_tm = effective_site_arrival
+                selected_tm = tm
+            elif effective_site_arrival == earliest_effective_site_arrival_for_best_tm:
+                if selected_tm is None or tm_trip_counter[tm] < tm_trip_counter[selected_tm]:
+                    selected_tm = tm
+        print(earliest_effective_site_arrival_for_best_tm)
+
+        if selected_tm is None:
+            print(f"Warning: Could not find a suitable TM for overall trip {trip_no}. Scheduling stopped.")
+            raise ValueError(f"Could not find suitable TM for trip number: {trip_no}")
+        
+        tm_identifier = tm_map.get(selected_tm, selected_tm)
+        tm_capacity = tm_capacities.get(selected_tm, avg_capacity)
+        tm_unloading_time = UNLOADING_TIME_LOOKUP.get(tm_capacity)
+
+        if tm_unloading_time is None:
+            tm_unloading_time = get_unloading_time(tm_capacity)
+
+
+        pump_start = earliest_effective_site_arrival_for_best_tm
+        plant_start = pump_start - timedelta(minutes=onward_time)
+        plant_load = plant_start - timedelta(minutes=load_time)
+        plant_buffer = plant_load - timedelta(minutes=buffer_time)
+        unloading_end = pump_start + timedelta(minutes=unloading_time)
+        return_at = unloading_end + timedelta(minutes=return_time)
+
+        # Update next available time to include buffer and loading time
+        tm_available_times[selected_tm] = return_at
+        tm_trip_counter[selected_tm] += 1
+        
+        volume_pumped = tm_capacity
+        completed_quantity += tm_capacity
+        if completed_quantity > total_quantity:
+            volume_pumped = remaining_quantity
+            completed_quantity = total_quantity
+
+        remaining_quantity -= volume_pumped
+
+        # Calculate cycle_time (return_ - plant_start in seconds)
+        cycle_time = (return_at - plant_buffer).total_seconds()
+        trip_no_for_tm = tm_trip_counter[selected_tm]
+
+        # Use datetime objects directly
+        trip = Trip(
+            trip_no=trip_no,
+            tm_no=tm_identifier,
+            tm_id=selected_tm,
+            plant_load=plant_load,
+            plant_buffer=plant_buffer,
+            plant_start=plant_start,
+            pump_start=pump_start,
+            unloading_time=unloading_end,
+            return_=return_at,
+            completed_capacity=completed_quantity,
+            cycle_time=cycle_time,
+            trip_no_for_tm=trip_no_for_tm
+        )
+
+        trips.append(trip)
+
+    return trips
+
+def burst_schedule(
+        selected_tms: List[str], 
+        input_params: InputParams,
+        schedule_date: date,
+        base_time: datetime,
+        partially_available_pump: AvailabilityBody,
+        partially_available_tm: Dict[str, AvailabilityBody],
+        tm_map: Dict[str, str],
+        tm_capacities: dict,
+        avg_capacity: float,
+        pump_id: str = None,
+    ) -> List[BurstTrip]:
+    
+    onward_time = input_params.onward_time  # Always use TM onward_time for TM trips
+    return_time = input_params.return_time
+    buffer_time = input_params.buffer_time
+    load_time = input_params.load_time
+    unloading_time = input_params.unloading_time
+    cycle_time = onward_time + return_time + buffer_time + load_time + unloading_time
+    tm_required = math.ceil(cycle_time / unloading_time)
+    total_tm_count = len(selected_tms)
+    tm_queue = total_tm_count - tm_required
+    max_wait_time = tm_queue * unloading_time
+    if max_wait_time <= 0:
+        return pour_schedule(
+            selected_tms=selected_tms,
+            input_params=input_params,
+            type="pumping",
+            schedule_date=schedule_date,
+            base_time=base_time,
+            partially_available_pump=partially_available_pump,
+            partially_available_tm=partially_available_tm,
+            tm_map=tm_map,
+            tm_capacities=tm_capacities,
+            avg_capacity=avg_capacity,
+            pump_id=pump_id
+        )
+    
+    headway_time = math.ceil(cycle_time / tm_required)
+
+    pump_onward_time = input_params.pump_onward_time
+    pump_fixing_time = input_params.pump_fixing_time
+
+    total_quantity = input_params.quantity
+    remaining_quantity = total_quantity
+    completed_quantity = 0  # Track how much has been completed
+    trip_no = 0
+    
+    # Track trip number for each TM
+    tm_trip_counter = {tm: 0 for tm in selected_tms}
+    # Track when each TM becomes available (returns from its last trip)
+    tm_available_times = {}
+    for tm in selected_tms:
+        partially_available_tm_end_time = datetime.min
+        if tm in partially_available_tm:
+            partially_available_tm_end_time = _convert_to_datetime(partially_available_tm[tm].end) + timedelta(minutes=1)
+        
+        if not partially_available_tm_end_time or partially_available_tm_end_time is None:
+            partially_available_tm_end_time = datetime.min
+
+        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
+
+    pump_available_time = base_time  # pump is free at this time
+    if pump_id and partially_available_pump:
+        pump_end = _convert_to_datetime(partially_available_pump.end)
+        if pump_end and pump_end - pump_available_time <= timedelta(hours=1):
+            pump_available_time = pump_end + timedelta(minutes = 1 + pump_onward_time + pump_fixing_time)
+
+    trips: List[BurstTrip] = []
+    while completed_quantity < total_quantity:    
+        trip_no += 1
+        selected_tm = None
+        earliest_buffer_start_for_best_tm = datetime.max
+
+        if trip_no == 1:
+            target_buffer_start_for_current_trip = pump_available_time - timedelta(minutes=onward_time+buffer_time+load_time)
+        elif trip_no <= tm_queue + 1:
+            target_buffer_start_for_current_trip = plant_buffer + timedelta(minutes=load_time+buffer_time+1)
+        else:
+            target_buffer_start_for_current_trip = max(plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1))
+
+        for tm in selected_tms:
+            # Calculate when TM becomes available after buffer and loading time
+            min_tm_available_time = tm_available_times[tm]
+            effective_buffer_start = max(target_buffer_start_for_current_trip, min_tm_available_time)
+
+            if effective_buffer_start < earliest_buffer_start_for_best_tm:
+                earliest_buffer_start_for_best_tm = effective_buffer_start
+                selected_tm = tm
+            elif effective_buffer_start == earliest_buffer_start_for_best_tm:
+                if selected_tm is None or tm_trip_counter[tm] < tm_trip_counter[selected_tm]:
+                    selected_tm = tm
+
+        if selected_tm is None:
+            print(f"Warning: Could not find a suitable TM for overall trip {trip_no}. Scheduling stopped.")
+            raise ValueError(f"Could not find suitable TM for trip number: {trip_no}")
+        
+        tm_identifier = tm_map.get(selected_tm, selected_tm)
+        tm_capacity = tm_capacities.get(selected_tm, avg_capacity)
+        tm_unloading_time = UNLOADING_TIME_LOOKUP.get(tm_capacity)
+
+        if tm_unloading_time is None:
+            tm_unloading_time = get_unloading_time(tm_capacity)
+
+
+        plant_buffer = earliest_buffer_start_for_best_tm
+        plant_load = plant_buffer + timedelta(minutes=buffer_time)
+        plant_start = plant_load + timedelta(minutes=load_time)
+        site_reach = plant_start + timedelta(minutes=onward_time)
+        pump_start = max(site_reach, unloading_end + timedelta(minutes=1)) if trip_no > 1 else site_reach
+        unloading_end = pump_start + timedelta(minutes=unloading_time)
+        return_at = unloading_end + timedelta(minutes=return_time)
+        waiting_time = (pump_start - site_reach).total_seconds() / 60
+        queue = waiting_time / unloading_time
+
+        # Update next available time to include buffer and loading time
+        tm_available_times[selected_tm] = return_at + timedelta(minutes=1)
+        tm_trip_counter[selected_tm] += 1
+        
+        volume_pumped = tm_capacity
+        completed_quantity += tm_capacity
+        if completed_quantity > total_quantity:
+            volume_pumped = remaining_quantity
+            completed_quantity = total_quantity
+
+        remaining_quantity -= volume_pumped
+
+        # Calculate cycle_time (return_ - plant_start in seconds)
+        cycle_time = (return_at - plant_buffer).total_seconds()
+        trip_no_for_tm = tm_trip_counter[selected_tm]
+
+        # Use datetime objects directly
+        trip = BurstTrip(
+            trip_no=trip_no,
+            tm_no=tm_identifier,
+            tm_id=selected_tm,
+            plant_load=plant_load,
+            plant_buffer=plant_buffer,
+            plant_start=plant_start,
+            site_reach=site_reach,
+            pump_start=pump_start,
+            unloading_time=unloading_end,
+            return_=return_at,
+            completed_capacity=completed_quantity,
+            cycle_time=cycle_time,
+            waiting_time=waiting_time,
+            queue=queue,
+            trip_no_for_tm=trip_no_for_tm
+        )
+
+        trips.append(trip)
+
+    return trips
+
 async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, user_id: str, type: str, partially_available_tm: Dict[str, AvailabilityBody], partially_available_pump: AvailabilityBody) -> ScheduleModel:
     """Generate the schedule based on selected Transit Mixers with single pump constraint."""
     schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
@@ -679,130 +974,35 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     base_time = datetime.combine(schedule_date, pump_start_time)
     print(f"Base time set to: {base_time}")
 
-    onward_time = schedule["input_params"]["onward_time"]  # Always use TM onward_time for TM trips
-    return_time = schedule["input_params"]["return_time"]
-    buffer_time = schedule["input_params"]["buffer_time"]
-    load_time = schedule["input_params"]["load_time"]
-    unloading_time = schedule["input_params"]["unloading_time"]
-    pump_onward_time = schedule["input_params"]["pump_onward_time"]
-    pump_fixing_time = schedule["input_params"]["pump_fixing_time"]
-
-    trips = []
-    total_quantity = schedule["input_params"]["quantity"]
-    remaining_quantity = total_quantity
-    completed_quantity = 0  # Track how much has been completed
-    trip_no = 0
-    
-    # Track trip number for each TM
-    tm_trip_counter = {tm: 0 for tm in selected_tms}
-    # Track when each TM becomes available (returns from its last trip)
-    tm_available_times = {tm: datetime.combine(schedule_date, time.min) for tm in selected_tms}
-    
-    pump_available_time = base_time  # pump is free at this time
-    if type == "pumping":
-        if pump_id and partially_available_pump:
-            pump_end = _convert_to_datetime(partially_available_pump.end)
-            print("Here ", pump_end, partially_available_pump.end, partially_available_pump)
-            if pump_end and pump_end - pump_available_time <= timedelta(hours=1):
-                pump_available_time = pump_end + timedelta(minutes = 1 + pump_onward_time + pump_fixing_time)
-    
-    # Maximum time to wait for a previously used TM before using a different one (in minutes)
-    max_wait_time = 15
-    while True:
-        # Stop condition for pumping type
-        if type == "pumping" and completed_quantity >= total_quantity:
-            break
-        # Stop condition for supply type
-        if type == "supply":
-            totalTrips = schedule["trip_count"]
-            if not totalTrips or totalTrips is None:
-                totalTrips = 1
-            if trip_no >= totalTrips:
-                break
-    
-        trip_no += 1
-        selected_tm = None
-        earliest_effective_site_arrival_for_best_tm = datetime.max 
-
-        target_site_arrival_for_current_trip = unloading_end + timedelta(minutes=1) if trip_no > 1 else pump_available_time
-
-        for tm in selected_tms:
-            # Calculate when TM becomes available after buffer and loading time
-            partially_available_tm_end_time = datetime.min
-            if tm in partially_available_tm:
-                partially_available_tm_end_time = _convert_to_datetime(partially_available_tm[tm].end) + timedelta(minutes=1)
-            
-            if not partially_available_tm_end_time or partially_available_tm_end_time is None:
-                partially_available_tm_end_time = datetime.min
-
-            min_tm_departure_time = max(tm_available_times[tm], partially_available_tm_end_time)
-            # Add buffer and loading time to determine when TM is actually available for next trip
-            tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time+load_time)
-            potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time)
-            effective_site_arrival = max(target_site_arrival_for_current_trip, potential_tm_arrival_time)
-
-            if effective_site_arrival < earliest_effective_site_arrival_for_best_tm:
-                earliest_effective_site_arrival_for_best_tm = effective_site_arrival
-                selected_tm = tm
-            elif effective_site_arrival == earliest_effective_site_arrival_for_best_tm:
-                if selected_tm is None or tm_trip_counter[tm] < tm_trip_counter[selected_tm]:
-                    selected_tm = tm
-
-        if selected_tm is None:
-            print(f"Warning: Could not find a suitable TM for overall trip {trip_no}. Scheduling stopped.")
-            raise ValueError(f"Could not find suitable TM for trip number: {trip_no}")
-        
-        tm_identifier = tm_map.get(selected_tm, selected_tm)
-        tm_capacity = tm_capacities.get(selected_tm, avg_capacity)
-        tm_unloading_time = UNLOADING_TIME_LOOKUP.get(tm_capacity)
-
-        if tm_unloading_time is None:
-            tm_unloading_time = get_unloading_time(tm_capacity)
-
-
-        pump_start = earliest_effective_site_arrival_for_best_tm
-        plant_start = pump_start - timedelta(minutes=onward_time)
-        plant_load = plant_start - timedelta(minutes=load_time)
-        plant_buffer = plant_load - timedelta(minutes=buffer_time)
-        unloading_end = pump_start + timedelta(minutes=unloading_time)
-        return_at = unloading_end + timedelta(minutes=return_time)
-
-        # Update next available time to include buffer and loading time
-        tm_available_times[selected_tm] = return_at
-        tm_trip_counter[selected_tm] += 1
-        
-        volume_pumped = tm_capacity
-        completed_quantity += tm_capacity
-        if completed_quantity > total_quantity:
-            volume_pumped = remaining_quantity
-            completed_quantity = total_quantity
-
-        remaining_quantity -= volume_pumped
-
-        # Calculate cycle_time (return_ - plant_start in seconds)
-        cycle_time = (return_at - plant_buffer).total_seconds()
-        trip_no_for_tm = tm_trip_counter[selected_tm]
-
-        # Use datetime objects directly
-        trip = Trip(
-            trip_no=trip_no,
-            tm_no=tm_identifier,
-            tm_id=selected_tm,
-            plant_load=plant_load,
-            plant_buffer=plant_buffer,
-            plant_start=plant_start,
-            pump_start=pump_start,
-            unloading_time=unloading_end,
-            return_=return_at,
-            completed_capacity=completed_quantity,
-            cycle_time=cycle_time,
-            trip_no_for_tm=trip_no_for_tm
-        )
-
-        trips.append(trip)
-
+    trips = pour_schedule(
+        selected_tms=selected_tms,
+        input_params=InputParams(**schedule["input_params"]),
+        type=type,
+        tripCount=schedule["trip_count"],
+        schedule_date=schedule_date,
+        base_time=base_time,
+        partially_available_pump=partially_available_pump,
+        partially_available_tm=partially_available_tm,
+        tm_map=tm_map,
+        tm_capacities=tm_capacities,
+        avg_capacity=avg_capacity,
+        pump_id=pump_id
+    )
+    burst_trips = burst_schedule(
+        selected_tms=selected_tms,
+        input_params=InputParams(**schedule["input_params"]),
+        schedule_date=schedule_date,
+        base_time=base_time,
+        partially_available_pump=partially_available_pump,
+        partially_available_tm=partially_available_tm,
+        tm_map=tm_map,
+        tm_capacities=tm_capacities,
+        avg_capacity=avg_capacity,
+        pump_id=pump_id
+    )
     # Safely serialize the trips to ensure all datetimes are properly converted
     serialized_trips = safe_serialize([trip.model_dump(by_alias=True) for trip in trips])
+    serialized_burst_trips = safe_serialize([burst_trip.model_dump(by_alias=True) for burst_trip in burst_trips])
 
     # Update schedule
     await schedules.update_one(
@@ -810,6 +1010,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
         {"$set": {
             "pump": ObjectId(pump_id) if ObjectId(pump_id) else None,
             "output_table": serialized_trips,
+            "burst_table": serialized_burst_trips,
             "status": "generated",
             "last_updated": datetime.utcnow()
         }}

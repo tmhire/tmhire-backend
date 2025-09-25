@@ -68,6 +68,11 @@ class Trip(BaseModel):
         }
     )
 
+class BurstTrip(Trip):
+    site_reach: Union[datetime, str]
+    waiting_time: int
+    queue: float
+
 class PumpType(str, Enum):
     LINE = "line"
     BOOM = "boom"
@@ -117,6 +122,7 @@ class ScheduleModel(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.utcnow)
     input_params: InputParams
     output_table: Optional[List[Trip]] = Field(default_factory=list)
+    burst_table: Optional[List[BurstTrip]] = Field(default_factory=list)
     tm_count: Optional[int] = None
     concreteGrade: Optional[Union[int | str]] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
