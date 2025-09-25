@@ -167,10 +167,13 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
             if "plant_buffer" not in trip:
                 trip["plant_buffer"] = plant_start - timedelta(minutes=buffer_time) if plant_start else None
 
-            if plant_start and return_at:
-                trip["cycle_time"] = (return_at - plant_start).total_seconds()
-            else:
-                trip["cycle_time"] = None
+            # I think that this below line of code is not needed and have commented it out in 25 September 2025 (but i am afraid to delete it)
+            # If anyone see's this code after atleast a month, then this means that the below line of code is definetly not needed.
+            # So please remove the code below after a month.
+            # if plant_start and return_at:
+            #     trip["cycle_time"] = (return_at - plant_start).total_seconds()
+            # else:
+            #     trip["cycle_time"] = None
 
             tm_id = trip.get("tm_id")
             trip["cushion_time"] = 0
@@ -743,7 +746,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
         remaining_quantity -= volume_pumped
 
         # Calculate cycle_time (return_ - plant_start in seconds)
-        cycle_time = (return_at - plant_start).total_seconds()
+        cycle_time = (return_at - plant_buffer).total_seconds()
         trip_no_for_tm = tm_trip_counter[selected_tm]
 
         # Use datetime objects directly
