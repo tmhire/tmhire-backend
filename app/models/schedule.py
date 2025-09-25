@@ -105,7 +105,7 @@ class ScheduleModel(BaseModel):
     project_name: Optional[str] = "Unknown Project"
     client_id: PyObjectId   # Now always required
     client_name: str
-    plant_id: Optional[PyObjectId] = None
+    plant_id: Optional[PyObjectId | str] = ""
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
@@ -216,7 +216,7 @@ class ScheduleCreate(BaseModel):
     project_id: str
     client_id: str  # Now required
     client_name: Optional[str] = None
-    plant_id: Optional[PyObjectId] = None
+    plant_id: Optional[PyObjectId | str] = ""
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
@@ -290,7 +290,7 @@ class ScheduleUpdate(BaseModel):
     project_id: Optional[str] = None
     client_id: Optional[str] = None  # Now required for update if project_id is updated
     client_name: Optional[str] = None
-    plant_id: Optional[PyObjectId] = None
+    plant_id: Optional[PyObjectId | str] = ""
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
