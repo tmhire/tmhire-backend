@@ -8,6 +8,7 @@ from app.models.user import UserModel
 from app.services.schedule_service import (
     get_all_schedules,
     get_schedule,
+    keep_first_and_last_trip,
     update_schedule,
     delete_schedule,
     create_schedule_draft,
@@ -26,8 +27,29 @@ async def read_schedules(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Get all schedules for the current user"""
-    schedules = await get_all_schedules(str(current_user.id), type)
+    schedules = await get_all_schedules(user_id=str(current_user.id), type=type)
     
+    schedules = keep_first_and_last_trip(schedules=schedules)
+    
+    # Safely serialize to handle any date/datetime objects
+    schedule_list = [schedule.model_dump() for schedule in schedules]
+    safe_data = safe_serialize(schedule_list)
+    
+    return StandardResponse(
+        success=True,
+        message="Schedules retrieved successfully",
+        data=safe_data
+    )
+
+@router.get("/reports", response_model=StandardResponse[List[ScheduleModel]])
+async def read_schedules(
+    type: ScheduleType = Query(ScheduleType.all, description="Filter schedules by type: 'supply' or 'pumping'"),
+    date: date | str = Query(datetime.now().date(), description="Filter schedules by date"),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Get all schedules for the current user"""
+    schedules = await get_all_schedules(user_id=str(current_user.id), type=type, date=date, isFromReports=True)
+        
     # Safely serialize to handle any date/datetime objects
     schedule_list = [schedule.model_dump() for schedule in schedules]
     safe_data = safe_serialize(schedule_list)

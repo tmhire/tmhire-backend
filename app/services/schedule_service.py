@@ -25,11 +25,39 @@ UNLOADING_TIME_LOOKUP = {
     12: 20
 }
 
-async def get_all_schedules(user_id: str, type: ScheduleType) -> List[ScheduleModel]:
+async def get_all_schedules(user_id: str, type: ScheduleType, date: date | str = datetime.now().date(), isFromReports = False) -> List[ScheduleModel]:
     schedule_list = []
     query = {"user_id": ObjectId(user_id)}
     if type != ScheduleType.all:
         query["type"] = type.value
+
+    if isFromReports:
+        if isinstance(date, str):
+            try:
+                date = datetime.fromisoformat(date).date()
+            except ValueError:
+                try:
+                    date = datetime.strptime(date, "%Y-%m-%d").date()
+                except ValueError:
+                    date = datetime.now().date()
+        elif isinstance(date, datetime):
+            date = date.date()
+        start_of_day = datetime.combine(date, time.min)
+        end_of_day = datetime.combine(date, time.max)
+        query["$or"] = [
+            {
+                "output_table.plant_start": {
+                    "$gte": start_of_day.isoformat(),
+                    "$lt": end_of_day.isoformat()
+                }
+            },
+            {
+                "output_table.return": {
+                    "$gte": start_of_day.isoformat(),
+                    "$lt": end_of_day.isoformat()
+                }
+            }
+        ]
 
     all_plants, all_projects, all_schedules = await asyncio.gather(
         get_all_plants(user_id),
@@ -78,6 +106,12 @@ async def get_all_schedules(user_id: str, type: ScheduleType) -> List[ScheduleMo
         
         schedule_list.append(ScheduleModel(**schedule))
     return schedule_list
+
+def keep_first_and_last_trip(schedules: List[ScheduleModel]) -> List[ScheduleModel]:
+    for schedule in schedules:
+        if schedule.output_table and len(schedule.output_table) > 2:
+            schedule.output_table = [schedule.output_table[0], schedule.output_table[-1]]
+    return schedules
 
 def _convert_to_datetime(date_str: str | datetime) -> datetime:
     if isinstance(date_str, str):

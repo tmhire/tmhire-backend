@@ -663,19 +663,19 @@ async def get_gantt_data(
         "user_id": ObjectId(user_id),
         "status": "generated",  # Only get generated schedules
         "$or": [
-        {
-            "output_table.plant_start": {
-                "$gte": start_datetime.isoformat(),
-                "$lt": end_datetime.isoformat()
+            {
+                "output_table.plant_start": {
+                    "$gte": start_datetime.isoformat(),
+                    "$lt": end_datetime.isoformat()
+                }
+            },
+            {
+                "output_table.return": {
+                    "$gte": start_datetime.isoformat(),
+                    "$lt": end_datetime.isoformat()
+                }
             }
-        },
-        {
-            "output_table.return": {
-                "$gte": start_datetime.isoformat(),
-                "$lt": end_datetime.isoformat()
-            }
-        }
-    ]
+        ]
     }
 
     all_tms, all_pumps, queried_schedules, all_plants, all_projects = await asyncio.gather(
