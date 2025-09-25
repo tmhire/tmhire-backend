@@ -78,7 +78,7 @@ async def get_all_schedules(user_id: str, type: ScheduleType, date: date | str =
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
         
-        for trip in schedule.get("output_table", []):
+        for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
             # Fields that need conversion
             time_fields = ["plant_start", "pump_start", "unloading_time", "return"]
             
@@ -126,7 +126,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
     if schedule:
         # Get the tm_identifiers map for any TMs in the output_table
         tm_ids = []
-        for trip in schedule.get("output_table", []):
+        for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
             tm_id = trip.get("tm_id")
             if tm_id and ObjectId.is_valid(tm_id):
                 tm_ids.append(ObjectId(tm_id))
@@ -139,7 +139,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                 tm_map[str(tm["_id"])] = {"identifier": tm["identifier"], "plant_name": plant["name"]}
 
             # Replace the TM IDs with their identifiers in the output_table
-            for trip in schedule.get("output_table", []):
+            for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
                 tm_id = trip.get("tm_id")
                 if tm_id and tm_id in tm_map:
                     trip["tm_no"] = tm_map[tm_id]["identifier"]
@@ -162,7 +162,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
 
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
-        for trip in schedule.get("output_table", []):
+        for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
             # Fields that need conversion
             time_fields = ["plant_start", "pump_start", "unloading_time", "return"]
             
@@ -188,7 +188,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0 )
         load_time = schedule.get("input_params", {}).get("load_time", 0 )
         tm_trip = {}
-        for trip in schedule.get("output_table", []):
+        for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
             # Calculate cycle_time
             # Also convert to datetime if needed
             plant_start = _convert_to_datetime(trip.get("plant_start"))
@@ -269,6 +269,7 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
             schedule_data["pumping_time"] = quantity / pumping_speed
         schedule_data["status"] = "draft"
         schedule_data["output_table"] = []
+        schedule_data["burst_table"] = []
 
     if "schedule_date" in schedule_data["input_params"]:
         if isinstance(schedule_data["input_params"]["schedule_date"], date):
@@ -496,6 +497,7 @@ async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> Schedule
     schedule_data["last_updated"] = datetime.utcnow()
     schedule_data["status"] = "draft"
     schedule_data["output_table"] = []
+    schedule_data["burst_table"] = []
     # Store both client_id and project_id
     schedule_data["project_id"] = ObjectId(schedule.project_id)
     schedule_data["client_id"] = ObjectId(str(client_id))
