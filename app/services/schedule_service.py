@@ -650,7 +650,7 @@ def pour_schedule(
         if not partially_available_tm_end_time or partially_available_tm_end_time is None:
             partially_available_tm_end_time = datetime.min
 
-        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
+        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min) - timedelta(minutes=buffer_time+load_time+onward_time), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
 
     pump_available_time = base_time  # pump is free at this time
     if type == "pumping":
@@ -677,8 +677,6 @@ def pour_schedule(
         earliest_effective_site_arrival_for_best_tm = datetime.max 
 
         target_site_arrival_for_current_trip = unloading_end + timedelta(minutes=1) if trip_no > 1 else pump_available_time
-        if trip_no == 1:
-            print(target_site_arrival_for_current_trip)
 
         for tm in selected_tms:
             # Calculate when TM becomes available after buffer and loading time
@@ -694,7 +692,6 @@ def pour_schedule(
             elif effective_site_arrival == earliest_effective_site_arrival_for_best_tm:
                 if selected_tm is None or tm_trip_counter[tm] < tm_trip_counter[selected_tm]:
                     selected_tm = tm
-        print(earliest_effective_site_arrival_for_best_tm)
 
         if selected_tm is None:
             print(f"Warning: Could not find a suitable TM for overall trip {trip_no}. Scheduling stopped.")
@@ -706,7 +703,6 @@ def pour_schedule(
 
         if tm_unloading_time is None:
             tm_unloading_time = get_unloading_time(tm_capacity)
-
 
         pump_start = earliest_effective_site_arrival_for_best_tm
         plant_start = pump_start - timedelta(minutes=onward_time)
@@ -811,7 +807,7 @@ def burst_schedule(
         if not partially_available_tm_end_time or partially_available_tm_end_time is None:
             partially_available_tm_end_time = datetime.min
 
-        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
+        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min) - timedelta(minutes=buffer_time+load_time+onward_time), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
 
     pump_available_time = base_time  # pump is free at this time
     if pump_id and partially_available_pump:
