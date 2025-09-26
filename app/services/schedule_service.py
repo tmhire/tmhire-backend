@@ -113,6 +113,8 @@ def keep_first_and_last_trip(schedules: List[ScheduleModel]) -> List[ScheduleMod
     for schedule in schedules:
         if schedule.output_table and len(schedule.output_table) > 2:
             schedule.output_table = [schedule.output_table[0], schedule.output_table[-1]]
+        if schedule.burst_table and len(schedule.burst_table) > 2:
+            schedule.burst_table = [schedule.burst_table[0], schedule.burst_table[-1]]
     return schedules
 
 def _convert_to_datetime(date_str: str | datetime) -> datetime:
