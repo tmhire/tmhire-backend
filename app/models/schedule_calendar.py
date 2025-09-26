@@ -95,3 +95,38 @@ class GanttResponse(BaseModel):
 class GanttRequest(BaseModel):
     """Body of the schedule_calendar/gantt endpoint"""
     query_date: datetime | str
+
+class PlantTask(BaseModel):
+    """Represents a task for a plant in the plant gantt chart"""
+    id: str
+    start: str | datetime
+    end: str | datetime
+    client: Optional[str] = None
+    project: Optional[str] = None
+    schedule_no: Optional[str] = None
+    type: str  # buffer, load, onward, work, return, cushion, fixing, removal, pump
+    tm_id: str  # The TM that's performing this task
+
+class PlantHourlyUtilization(BaseModel):
+    """Represents hourly TM utilization for a plant"""
+    hour: int  # 0-23
+    tm_count: int  # Number of TMs used in this hour
+    tm_ids: List[str]  # List of TM IDs used in this hour
+    utilization_percentage: float  # Percentage of plant capacity used
+
+class PlantGanttRow(BaseModel):
+    """Represents a plant row in the plant gantt chart"""
+    id: str  # plant id
+    name: str  # plant name
+    location: Optional[str] = None
+    capacity: Optional[float] = None
+    tm_per_hour: float  # Theoretical TM capacity per hour
+    tasks: List[PlantTask] = Field(default_factory=list)
+    hourly_utilization: List[PlantHourlyUtilization] = Field(default_factory=list)
+
+class PlantGanttResponse(BaseModel):
+    """Response model for plant-based Gantt chart data"""
+    plants: List[PlantGanttRow]
+    query_date: str
+    total_plants: int
+    total_tms_used: int

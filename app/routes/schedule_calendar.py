@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends
 from datetime import date
 from app.models.user import UserModel
-from app.models.schedule_calendar import DailySchedule, GanttRequest, GanttResponse, ScheduleCalendarQuery
+from app.models.schedule_calendar import DailySchedule, GanttRequest, GanttResponse, ScheduleCalendarQuery, PlantGanttResponse
 from app.services.schedule_calendar_service import (
     get_calendar_for_date_range,
     get_tm_availability,
-    get_gantt_data
+    get_gantt_data,
+    get_plant_gantt_data
 )
 from app.services.auth_service import get_current_user
 from typing import List, Dict, Any
@@ -45,6 +46,29 @@ async def get_gantt_calendar(
         success=True,
         message="Gantt calendar data retrieved successfully",
         data=gantt_data
+    )
+
+@router.post("/gantt/plants", response_model=StandardResponse[PlantGanttResponse])
+async def get_plant_gantt_calendar(
+    query: GanttRequest,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Get plant-based gantt data with hourly TM utilization.
+
+    Request body:
+    - query_date: Start of the 24-hour window (supports custom start hour)
+
+    Returns plant rows with:
+    - tm_per_hour: theoretical TM capacity per hour
+    - tasks: list of load segments with TM id and metadata
+    - hourly_utilization: per-hour TM count and TM ids
+    """
+    data = await get_plant_gantt_data(query.query_date, str(current_user.id))
+    return StandardResponse(
+        success=True,
+        message="Plant-based gantt data retrieved successfully",
+        data=data
     )
 
 @router.post("/", response_model=StandardResponse[List[DailySchedule]])

@@ -3,7 +3,7 @@ from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, Tran
 from app.models.user import UserModel
 from app.services.tm_service import (
     get_all_tms, get_tm, create_tm, update_tm, delete_tm, get_average_capacity,
-    get_available_tms, get_tm_availability_slots
+    get_tm_availability_slots
 )
 from app.services.auth_service import get_current_user
 from typing import List, Dict, Any
@@ -99,47 +99,47 @@ async def read_average_capacity(current_user: UserModel = Depends(get_current_us
         data={"average_capacity": avg_capacity}
     )
 
-@router.get("/available", response_model=StandardResponse[List[TransitMixerModel]])
-async def read_available_tms(
-    date: str = Query(..., description="Date in YYYY-MM-DD format"),
-    current_user: UserModel = Depends(get_current_user)
-):
-    """
-    Retrieve all transit mixers available on the specified date.
+# @router.get("/available", response_model=StandardResponse[List[TransitMixerModel]])
+# async def read_available_tms(
+#     date: str = Query(..., description="Date in YYYY-MM-DD format"),
+#     current_user: UserModel = Depends(get_current_user)
+# ):
+#     """
+#     Retrieve all transit mixers available on the specified date.
     
-    Query parameter:
-    - date: The date in YYYY-MM-DD format to check for availability
+#     Query parameter:
+#     - date: The date in YYYY-MM-DD format to check for availability
     
-    Returns a list of all available transit mixers on the specified date.
-    """
-    try:
-        # Convert string date to datetime.date object
-        parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
+#     Returns a list of all available transit mixers on the specified date.
+#     """
+#     try:
+#         # Convert string date to datetime.date object
+#         parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
         
-        # Get available TMs
-        tms = await get_available_tms(parsed_date, str(current_user.id))
+#         # Get available TMs
+#         tms = await get_available_tms(parsed_date, str(current_user.id))
         
-        # Convert to dict for safer serialization
-        tm_list = [tm.model_dump() for tm in tms]
+#         # Convert to dict for safer serialization
+#         tm_list = [tm.model_dump() for tm in tms]
         
-        # Convert any date/datetime objects in the result to strings
-        safe_data = safe_serialize(tm_list)
+#         # Convert any date/datetime objects in the result to strings
+#         safe_data = safe_serialize(tm_list)
         
-        return StandardResponse(
-            success=True,
-            message="Available transit mixers retrieved successfully",
-            data=safe_data
-        )
-    except Exception as e:
-        # Log the error for debugging
-        import logging
-        logging.error(f"Error in read_available_tms: {str(e)}")
+#         return StandardResponse(
+#             success=True,
+#             message="Available transit mixers retrieved successfully",
+#             data=safe_data
+#         )
+#     except Exception as e:
+#         # Log the error for debugging
+#         import logging
+#         logging.error(f"Error in read_available_tms: {str(e)}")
         
-        # Return a more specific error message
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve available transit mixers: {str(e)}"
-        )
+#         # Return a more specific error message
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Failed to retrieve available transit mixers: {str(e)}"
+#         )
 
 @router.get("/{tm_id}", response_model=StandardResponse[TransitMixerModel])
 async def read_tm(

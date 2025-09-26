@@ -2,7 +2,7 @@ from app.db.mongodb import transit_mixers, schedules
 from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, TransitMixerUpdate
 from bson import ObjectId
 from typing import List, Optional, Dict, Any
-from app.services.schedule_calendar_service import get_tm_availability
+# from app.services.schedule_calendar_service import get_tm_availability
 from datetime import datetime, date, time, timedelta
 from pymongo import DESCENDING
 
@@ -77,47 +77,47 @@ async def get_tms_by_plant(plant_id: str, user_id: str) -> List[TransitMixerMode
         tms.append(TransitMixerModel(**tm))
     return tms
 
-async def get_available_tms(date_val: Any, user_id: str) -> List[TransitMixerModel]:
-    """Get all transit mixers that are available on the given date."""
-    # Parse the date if it's a string, otherwise use as-is if it's already a date object
-    date_obj = None
-    if isinstance(date_val, str):
-        try:
-            date_obj = datetime.strptime(date_val, "%Y-%m-%d").date()
-        except ValueError:
-            # Fallback to today if date format is invalid
-            date_obj = datetime.now().date()
-    elif isinstance(date_val, date):
-        date_obj = date_val
-    else:
-        # Fallback to today for any other type
-        date_obj = datetime.now().date()
+# async def get_available_tms(date_val: Any, user_id: str) -> List[TransitMixerModel]:
+#     """Get all transit mixers that are available on the given date."""
+#     # Parse the date if it's a string, otherwise use as-is if it's already a date object
+#     date_obj = None
+#     if isinstance(date_val, str):
+#         try:
+#             date_obj = datetime.strptime(date_val, "%Y-%m-%d").date()
+#         except ValueError:
+#             # Fallback to today if date format is invalid
+#             date_obj = datetime.now().date()
+#     elif isinstance(date_val, date):
+#         date_obj = date_val
+#     else:
+#         # Fallback to today for any other type
+#         date_obj = datetime.now().date()
     
-    # Get all TMs for this user
-    tms = await get_all_tms(user_id)
-    available_tms = []
+#     # Get all TMs for this user
+#     tms = await get_all_tms(user_id)
+#     available_tms = []
     
-    for tm in tms:
-        try:
-            # Check availability for this TM
-            availability = await get_tm_availability(date_obj, str(tm.id), user_id)
+#     for tm in tms:
+#         try:
+#             # Check availability for this TM
+#             availability = await get_tm_availability(date_obj, str(tm.id), user_id)
             
-            # If any time slot is available, consider the TM available
-            tm_is_available = False
-            for slot in availability:
-                if slot.get("status") == "available":
-                    tm_is_available = True
-                    break
+#             # If any time slot is available, consider the TM available
+#             tm_is_available = False
+#             for slot in availability:
+#                 if slot.get("status") == "available":
+#                     tm_is_available = True
+#                     break
             
-            if tm_is_available:
-                available_tms.append(tm)
-        except Exception as e:
-            import logging
-            logging.error(f"Error checking availability for TM {tm.id}: {str(e)}")
-            # Continue with the next TM if there's an error
-            continue
+#             if tm_is_available:
+#                 available_tms.append(tm)
+#         except Exception as e:
+#             import logging
+#             logging.error(f"Error checking availability for TM {tm.id}: {str(e)}")
+#             # Continue with the next TM if there's an error
+#             continue
     
-    return available_tms
+#     return available_tms
 
 async def get_tm_availability_slots(tm_id: str, date_val: date, user_id: str) -> Dict[str, Any]:
     """

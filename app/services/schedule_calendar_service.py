@@ -1,10 +1,12 @@
 from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, pumps, projects
-from app.models.schedule_calendar import DailySchedule, GanttPump, GanttResponse, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask
+from app.models.schedule_calendar import DailySchedule, GanttPump, GanttResponse, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask, PlantGanttResponse, PlantGanttRow, PlantTask, PlantHourlyUtilization
 from app.models.schedule import ScheduleModel
 from datetime import datetime, date, time, timedelta, timezone
 from bson import ObjectId
 from typing import List, Dict, Optional, Any
 import asyncio
+import math
+from app.services.tm_service import get_average_capacity
 
 # Constants for calendar setup
 CALENDAR_START_HOUR = 8  # 8AM
@@ -656,7 +658,6 @@ async def get_gantt_data(
     # Define the start and end of the day in UTC
     start_datetime = query_date
     end_datetime = query_date + timedelta(days=1)
-    print(start_datetime, end_datetime)
 
     # Find all schedules in the date range
     schedule_query = {
@@ -938,3 +939,162 @@ def get_date_from_iso(iso_str):
                         return datetime.fromisoformat(iso_str)
                     except Exception:
                         return None
+
+async def get_plant_gantt_data(
+    query_date_str: str,
+    user_id: str
+) -> PlantGanttResponse:
+    """Aggregate plant-based tasks and hourly TM utilization for the given day."""
+    # Determine the day window from the provided query start (can encode custom start hour)
+    query_start = datetime.fromisoformat(query_date_str).replace(tzinfo=timezone.utc)
+    day_start = query_start
+    day_end = query_start + timedelta(days=1)
+
+    # Load reference data
+    all_tms, all_plants, queried_schedules, all_projects, avg_tm_capacity = await asyncio.gather(
+        transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None),
+        plants.find({"user_id": ObjectId(user_id)}).to_list(length=None),
+        schedules.find({
+            "user_id": ObjectId(user_id),
+            "status": "generated",
+            "$or": [
+                {"output_table.plant_start": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}},
+                {"output_table.return": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}}
+            ]
+        }).to_list(length=None),
+        projects.find({"user_id": ObjectId(user_id)}).to_list(length=None),
+        get_average_capacity(user_id)
+    )
+
+    # Build maps
+    plant_map: Dict[str, Dict[str, Any]] = {str(p["_id"]): p for p in all_plants}
+    project_map: Dict[str, Dict[str, Any]] = {str(p["_id"]): p for p in all_projects}
+    tm_to_plant: Dict[str, Optional[str]] = {}
+    for tm in all_tms:
+        tm_to_plant[str(tm["_id"])]= str(tm.get("plant_id")) if tm.get("plant_id") else None
+
+    # Initialize plant rows
+    def compute_tm_per_hour(plant: Dict[str, Any], avg_tm_capacity: float) -> float:
+        # Approximate TM per hour using plant capacity and avg TM capacity (default 6 m3)
+        capacity = plant.get("capacity") or 0
+        if capacity and capacity > 0:
+            # minutes to load one TM = avg_tm_capacity / (capacity m3 per hour) * 60
+            load_time = math.ceil((avg_tm_capacity / (capacity / 60)) / 5) * 5
+            if load_time <= 0:
+                return 0
+            return 60 / load_time
+        return 0
+
+    plants_rows: Dict[str, PlantGanttRow] = {}
+    for plant_id, plant in plant_map.items():
+        plants_rows[plant_id] = PlantGanttRow(
+            id=plant_id,
+            name=plant.get("name", "Unknown Plant"),
+            location=plant.get("location"),
+            capacity=plant.get("capacity"),
+            tm_per_hour=compute_tm_per_hour(plant, avg_tm_capacity),
+            tasks=[],
+            hourly_utilization=[
+                PlantHourlyUtilization(hour=h, tm_count=0, tm_ids=[], utilization_percentage=0.0)
+                for h in range(24)
+            ]
+        )
+
+    # Helper to convert string or datetime to aware datetime
+    def to_dt(val: Any) -> Optional[datetime]:
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+        if isinstance(val, str):
+            return _parse_datetime_with_timezone(val)
+        return None
+
+    total_tms_used_set = set()
+
+    # Walk schedules and build plant-based load segments per TM
+    for schedule in queried_schedules:
+        schedule_id = str(schedule.get("_id"))
+        client_name = schedule.get("client_name")
+        schedule_no = schedule.get("schedule_no")
+        project_id = str(schedule.get("project_id"))
+        project_name = schedule.get("project_name", None)
+        if project_name is None and project_map[project_id] is not None:
+            project_name = project_map[project_id]["name"]
+        # Project details are optional here; avoid extra fetch to keep it light
+        trips = schedule.get("output_table", []) or []
+
+        # Group by TM
+        trips_by_tm: Dict[str, List[Dict[str, Any]]] = {}
+        for trip in trips:
+            tm_id = trip.get("tm_id")
+            if not tm_id:
+                continue
+            trips_by_tm.setdefault(tm_id, []).append(trip)
+
+        for tm_id, tm_trips in trips_by_tm.items():
+            plant_id = tm_to_plant.get(tm_id)
+            if not plant_id or plant_id not in plants_rows:
+                continue
+            row = plants_rows[plant_id]
+
+            # Sort by plant_start
+            tm_trips.sort(key=lambda t: to_dt(t.get("plant_start")) or day_start)
+
+            buffer_time = schedule.get("input_params", {}).get("buffer_time", 0)
+
+            for trip in tm_trips:
+                plant_start_dt = to_dt(trip.get("plant_start"))
+                plant_load_dt = to_dt(trip.get("plant_load"))
+                if plant_load_dt is None and plant_start_dt is not None and buffer_time:
+                    plant_load_dt = plant_start_dt - timedelta(minutes=buffer_time)
+
+                # Consider only load segment for utilization
+                if plant_load_dt and plant_start_dt:
+                    # Clip to day window
+                    seg_start = max(plant_load_dt, day_start)
+                    seg_end = min(plant_start_dt, day_end)
+                    if seg_start < seg_end:
+                        # Add a task entry
+                        row.tasks.append(PlantTask(
+                            id=f"load-{schedule_id}-{tm_id}",
+                            start=seg_start,
+                            end=seg_end,
+                            client=client_name,
+                            project=project_name,
+                            schedule_no=schedule_no,
+                            type="load",
+                            tm_id=tm_id
+                        ))
+
+                        # Mark hourly utilization across hours overlapped
+                        # hours from relative to day_start
+                        start_hour = int((seg_start - day_start).total_seconds() // 3600)
+                        end_hour = int((seg_end - day_start + timedelta(seconds=3599)).total_seconds() // 3600)
+                        for hour in range(max(0, start_hour), min(24, end_hour)):
+                            util = row.hourly_utilization[hour]
+                            if tm_id not in util.tm_ids:
+                                util.tm_ids.append(tm_id)
+                                util.tm_count += 1
+                                total_tms_used_set.add(tm_id)
+                                # utilization percentage relative to theoretical tm/hour
+                                if row.tm_per_hour and row.tm_per_hour > 0:
+                                    util.utilization_percentage = (util.tm_count / row.tm_per_hour) * 100.0
+                                else:
+                                    util.utilization_percentage = 0.0
+
+    # Prepare final list (only plants with any tasks or utilization)
+    plants_list: List[PlantGanttRow] = plants_rows.values()
+    # for row in plants_rows.values():
+    #     has_activity = len(row.tasks) > 0 or any(u.tm_count > 0 for u in row.hourly_utilization)
+    #     if has_activity:
+    #         # Ensure hourly utilization list is exactly 24 items
+    #         row.hourly_utilization = row.hourly_utilization[:24]
+    #         plants_list.append(row)
+
+    return PlantGanttResponse(
+        plants=sorted(plants_list, key=lambda r: r.name or r.id),
+        query_date=day_start.isoformat(),
+        total_plants=len(plants_list),
+        total_tms_used=len(total_tms_used_set)
+    )
