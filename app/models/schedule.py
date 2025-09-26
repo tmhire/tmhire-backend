@@ -20,6 +20,7 @@ class InputParams(BaseModel):
     load_time: int = 0
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
     schedule_date: date = Field(default_factory=lambda: datetime.now().date())
+    is_burst_model: Optional[bool] = False
     
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -173,7 +174,8 @@ class ScheduleModel(BaseModel):
                     "buffer_time": 5,
                     "load_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
-                    "schedule_date": "2023-06-25"
+                    "schedule_date": "2023-06-25",
+                    "is_burst_model": False
                 },
                 "tm_count": 6,
                 "concreteGrade": 25,
@@ -278,7 +280,8 @@ class ScheduleCreate(BaseModel):
                     "buffer_time": 5,
                     "load_time": 5,
                     "pump_start": "2023-06-25T08:00:00",
-                    "schedule_date": "2023-06-25"
+                    "schedule_date": "2023-06-25",
+                    "is_burst_model": False
                 },
                 "type": "supply",
                 "tm_overrule": 1,
@@ -341,7 +344,8 @@ class ScheduleUpdate(BaseModel):
                     "buffer_time": 5,
                     "load_time": 5,
                     "pump_start": "2023-06-26T08:00:00",
-                    "schedule_date": "2023-06-26"
+                    "schedule_date": "2023-06-26",
+                    "is_burst_model": False
                 },
                 "status": "draft",
                 "pump": "60d5ec9af682fcd81a060e73",
