@@ -77,6 +77,8 @@ async def get_all_schedules(user_id: str, type: ScheduleType, date: date | str =
     for schedule in all_schedules:
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
+        if "burst_table" not in schedule:
+            schedule["burst_table"] = []
         
         for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
             # Fields that need conversion
@@ -772,20 +774,20 @@ def burst_schedule(
     total_tm_count = len(selected_tms)
     tm_queue = total_tm_count - tm_required
     max_wait_time = tm_queue * unloading_time
-    if max_wait_time <= 0:
-        return pour_schedule(
-            selected_tms=selected_tms,
-            input_params=input_params,
-            type="pumping",
-            schedule_date=schedule_date,
-            base_time=base_time,
-            partially_available_pump=partially_available_pump,
-            partially_available_tm=partially_available_tm,
-            tm_map=tm_map,
-            tm_capacities=tm_capacities,
-            avg_capacity=avg_capacity,
-            pump_id=pump_id
-        )
+    # if max_wait_time <= 0:
+    #     return pour_schedule(
+    #         selected_tms=selected_tms,
+    #         input_params=input_params,
+    #         type="pumping",
+    #         schedule_date=schedule_date,
+    #         base_time=base_time,
+    #         partially_available_pump=partially_available_pump,
+    #         partially_available_tm=partially_available_tm,
+    #         tm_map=tm_map,
+    #         tm_capacities=tm_capacities,
+    #         avg_capacity=avg_capacity,
+    #         pump_id=pump_id
+    #     )
     
     headway_time = math.ceil(cycle_time / total_tm_count)
 

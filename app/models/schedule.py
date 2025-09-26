@@ -70,9 +70,9 @@ class Trip(BaseModel):
     )
 
 class BurstTrip(Trip):
-    site_reach: Union[datetime, str]
-    waiting_time: int
-    queue: float
+    site_reach: Union[datetime, str] = ""
+    waiting_time: int = 0
+    queue: float = 0
 
 class PumpType(str, Enum):
     LINE = "line"
