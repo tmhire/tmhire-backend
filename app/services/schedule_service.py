@@ -787,7 +787,7 @@ def burst_schedule(
             pump_id=pump_id
         )
     
-    headway_time = math.ceil(cycle_time / tm_required)
+    headway_time = math.ceil(cycle_time / total_tm_count)
 
     pump_onward_time = input_params.pump_onward_time
     pump_fixing_time = input_params.pump_fixing_time
@@ -828,7 +828,8 @@ def burst_schedule(
         elif trip_no <= tm_queue + 1:
             target_buffer_start_for_current_trip = plant_buffer + timedelta(minutes=load_time+buffer_time+1)
         else:
-            target_buffer_start_for_current_trip = max(plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1))
+            print(plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1), "head", headway_time)
+            target_buffer_start_for_current_trip = max(plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1+onward_time+buffer_time+load_time))
 
         for tm in selected_tms:
             # Calculate when TM becomes available after buffer and loading time
