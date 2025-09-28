@@ -39,6 +39,18 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
                     "$gte": day_start.isoformat(),
                     "$lt": day_end.isoformat()
                 }
+            },
+            {
+                "burst_table.plant_start": {
+                    "$gte": day_start.isoformat(),
+                    "$lt": day_end.isoformat()
+                }
+            },
+            {
+                "burst_table.return": {
+                    "$gte": day_start.isoformat(),
+                    "$lt": day_end.isoformat()
+                }
             }
         ]
         }).sort("created_at", DESCENDING).to_list(length=None)
@@ -99,8 +111,11 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
     for schedule in schedules_in_date:
         schedule_type = "pump" if schedule.get("type", "pumping") == "pumping" else "supply"
 
-        # Find the earliest pump_start and latest return in output_table
-        trips = schedule.get("output_table", [])
+        # Check if this schedule uses burst model
+        is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
+        
+        # Choose the appropriate table based on is_burst_model
+        trips = schedule.get("burst_table", []) if is_burst_model else schedule.get("output_table", [])
         if not trips:
             print("No trips", trips, schedule)
             continue
@@ -243,8 +258,12 @@ async def get_monthly_stats(user_id: ObjectId) -> Dict[str, List[float]]:
             monthly_quantity += input_params.get("quantity", 0)
             
             # Count unique TMs used
-            output_table = schedule.get("output_table", [])
-            for trip in output_table:
+            # Check if this schedule uses burst model
+            is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
+            
+            # Choose the appropriate table based on is_burst_model
+            trips_table = schedule.get("burst_table", []) if is_burst_model else schedule.get("output_table", [])
+            for trip in trips_table:
                 if trip.get("tm_id"):
                     monthly_tms.add(trip["tm_id"])
         

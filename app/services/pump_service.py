@@ -131,8 +131,11 @@ async def get_pump_gantt_data(query_date: datetime.date, user_id: str) -> List[G
         if not pump_id or pump_id not in pump_map:
             continue
 
-        # Find the earliest pump_start and latest return in output_table
-        trips = schedule.get("output_table", [])
+        # Check if this schedule uses burst model
+        is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
+        
+        # Choose the appropriate table based on is_burst_model
+        trips = schedule.get("burst_table", []) if is_burst_model else schedule.get("output_table", [])
         if not trips:
             continue
         start_time = trips[0].get("pump_start")

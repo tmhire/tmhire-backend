@@ -154,20 +154,43 @@ async def get_tm_availability_slots(tm_id: str, date_val: date, user_id: str) ->
     # Find all schedules with trips involving this TM on the given date
     async for schedule in schedules.find({
         "user_id": ObjectId(user_id),
-        "output_table": {
-            "$elemMatch": {
-                "tm_id": tm_id,
-                "$or": [
-                    {"plant_start": {"$gte": day_start, "$lte": day_end}},
-                    {"return": {"$gte": day_start, "$lte": day_end}},
-                    # Handle case where trip spans across the day
-                    {"plant_start": {"$lte": day_start}, "return": {"$gte": day_end}}
-                ]
+        "$or": [
+            {
+                "output_table": {
+                    "$elemMatch": {
+                        "tm_id": tm_id,
+                        "$or": [
+                            {"plant_start": {"$gte": day_start, "$lte": day_end}},
+                            {"return": {"$gte": day_start, "$lte": day_end}},
+                            # Handle case where trip spans across the day
+                            {"plant_start": {"$lte": day_start}, "return": {"$gte": day_end}}
+                        ]
+                    }
+                }
+            },
+            {
+                "burst_table": {
+                    "$elemMatch": {
+                        "tm_id": tm_id,
+                        "$or": [
+                            {"plant_start": {"$gte": day_start, "$lte": day_end}},
+                            {"return": {"$gte": day_start, "$lte": day_end}},
+                            # Handle case where trip spans across the day
+                            {"plant_start": {"$lte": day_start}, "return": {"$gte": day_end}}
+                        ]
+                    }
+                }
             }
-        }
+        ]
     }):
+        # Check if this schedule uses burst model
+        is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
+        
+        # Choose the appropriate table based on is_burst_model
+        trips_table = schedule.get("burst_table", []) if is_burst_model else schedule.get("output_table", [])
+        
         # For each trip in this schedule that involves the TM
-        for trip in schedule.get("output_table", []):
+        for trip in trips_table:
             if trip.get("tm_id") != tm_id:
                 continue
                 

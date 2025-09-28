@@ -675,6 +675,18 @@ async def get_gantt_data(
                     "$gte": start_datetime.isoformat(),
                     "$lt": end_datetime.isoformat()
                 }
+            },
+            {
+                "burst_table.plant_start": {
+                    "$gte": start_datetime.isoformat(),
+                    "$lt": end_datetime.isoformat()
+                }
+            },
+            {
+                "burst_table.return": {
+                    "$gte": start_datetime.isoformat(),
+                    "$lt": end_datetime.isoformat()
+                }
             }
         ]
     }
@@ -736,9 +748,15 @@ async def get_gantt_data(
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0)
         load_time = schedule.get("input_params", {}).get("load_time", 0)
 
+        # Check if this schedule uses burst model
+        is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
+        
+        # Choose the appropriate table based on is_burst_model
+        trips_table = schedule.get("burst_table", []) if is_burst_model else schedule.get("output_table", [])
+
         # Group trips by tm_id for this schedule
         trips_by_tm = {}
-        for trip in schedule.get("output_table", []):
+        for trip in trips_table:
             tm_id = trip.get("tm_id")
             if not tm_id:
                 continue
@@ -858,8 +876,8 @@ async def get_gantt_data(
         if not pump_id or pump_id not in pump_map:
             continue
 
-        # Find the earliest pump_start and latest return in output_table
-        trips = schedule.get("output_table", [])
+        # Find the earliest pump_start and latest return in the appropriate table
+        trips = trips_table  # Use the same table we determined above
         if not trips:
             continue
         start_time = trips[0].get("pump_start")
@@ -959,7 +977,9 @@ async def get_plant_gantt_data(
             "status": "generated",
             "$or": [
                 {"output_table.plant_start": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}},
-                {"output_table.return": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}}
+                {"output_table.return": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}},
+                {"burst_table.plant_start": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}},
+                {"burst_table.return": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}}
             ]
         }).to_list(length=None),
         projects.find({"user_id": ObjectId(user_id)}).to_list(length=None),
@@ -1022,7 +1042,13 @@ async def get_plant_gantt_data(
         if project_name is None and project_map[project_id] is not None:
             project_name = project_map[project_id]["name"]
         # Project details are optional here; avoid extra fetch to keep it light
-        trips = schedule.get("output_table", []) or []
+        
+        # Check if this schedule uses burst model
+        is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
+        
+        # Choose the appropriate table based on is_burst_model
+        trips = schedule.get("burst_table", []) if is_burst_model else schedule.get("output_table", [])
+        trips = trips or []
 
         # Group by TM
         trips_by_tm: Dict[str, List[Dict[str, Any]]] = {}
