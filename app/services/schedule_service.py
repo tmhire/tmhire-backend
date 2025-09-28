@@ -1206,3 +1206,27 @@ async def get_tm_identifier(tm_id: str, user_id: str) -> str:
         return tm.get("identifier", tm_id)
     return tm_id
 
+async def toggle_burst_model(schedule_id: str, user_id: str) -> Optional[GetScheduleResponse]:
+    """Toggle the is_burst_model flag in the schedule's input_params"""
+    schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
+    if not schedule:
+        return None
+    
+    # Get current is_burst_model value, default to False if not present
+    current_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
+    new_burst_model = not current_burst_model
+    
+    # Update the schedule with the new is_burst_model value
+    await schedules.update_one(
+        {"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)},
+        {
+            "$set": {
+                "input_params.is_burst_model": new_burst_model,
+                "last_updated": datetime.utcnow()
+            }
+        }
+    )
+    
+    # Return the updated schedule
+    return await get_schedule(schedule_id, user_id)
+

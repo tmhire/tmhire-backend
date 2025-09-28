@@ -13,7 +13,8 @@ from app.services.schedule_service import (
     delete_schedule,
     create_schedule_draft,
     generate_schedule,
-    get_daily_schedule
+    get_daily_schedule,
+    toggle_burst_model
 )
 from app.services.auth_service import get_current_user
 from app.schemas.response import StandardResponse
@@ -155,6 +156,28 @@ async def update_existing_schedule(
     return StandardResponse(
         success=True,
         message="Schedule updated successfully",
+        data=safe_data
+    )
+
+@router.put("/{schedule_id}/toggle-burst-model", response_model=StandardResponse[GetScheduleResponse])
+async def toggle_schedule_burst_model(
+    schedule_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """Toggle the is_burst_model flag for a schedule by ID."""
+    updated_schedule = await toggle_burst_model(schedule_id, str(current_user.id))
+    if not updated_schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Schedule not found"
+        )
+    
+    # Safely serialize to handle any date/datetime objects
+    safe_data = safe_serialize(updated_schedule.model_dump())
+    
+    return StandardResponse(
+        success=True,
+        message="Burst model toggled successfully",
         data=safe_data
     )
 
