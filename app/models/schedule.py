@@ -246,6 +246,7 @@ class ScheduleCreate(BaseModel):
     tm_overrule: Optional[int] = None
     trip_count: Optional[int] = None
     is_round_trip: Optional[bool] = False
+    tm_count: Optional[int] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -286,7 +287,8 @@ class ScheduleCreate(BaseModel):
                 "type": "supply",
                 "tm_overrule": 1,
                 "trip_count": 5,
-                "is_round_trip": False
+                "is_round_trip": False,
+                "tm_count": 6,
             }
         }
     )
@@ -321,6 +323,7 @@ class ScheduleUpdate(BaseModel):
     tm_overrule: Optional[int] = None
     trip_count: Optional[int] = None
     is_round_trip: Optional[bool] = False
+    tm_count: Optional[int] = None
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -362,7 +365,8 @@ class ScheduleUpdate(BaseModel):
                 "type": "supply",
                 "tm_overrule": 1,
                 "trip_count": 5,
-                "is_round_trip": False
+                "is_round_trip": False,
+                "tm_count": 6,
             }
         }
     )

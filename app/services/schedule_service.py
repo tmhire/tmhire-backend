@@ -296,9 +296,9 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
 
     updated_schedule = await get_schedule(id, user_id)
     
-    # Update calendar if schedule has changes
-    if updated_schedule and updated_schedule.output_table:
-        await update_calendar_after_schedule(updated_schedule)
+    # # Update calendar if schedule has changes
+    # if updated_schedule and updated_schedule.output_table:
+    #     await update_calendar_after_schedule(updated_schedule)
         
     return updated_schedule
 
@@ -549,8 +549,8 @@ async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> Schedule
         pump_start_time = time(8, 0)
     input_params["pump_start"] = datetime.combine(schedule_date, pump_start_time)
     schedule_data["input_params"] = input_params
-    tm_suggestion = await calculate_tm_suggestions(user_id, InputParams(**input_params))
-    schedule_data["tm_count"] = tm_suggestion["tm_count"]
+    # tm_suggestion = await calculate_tm_suggestions(user_id, InputParams(**input_params))
+    # schedule_data["tm_count"] = tm_suggestion["tm_count"]
     result = await schedules.insert_one(schedule_data)
     new_schedule = await schedules.find_one({"_id": result.inserted_id, "user_id": ObjectId(user_id)})
     if new_schedule:
