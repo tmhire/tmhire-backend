@@ -45,6 +45,7 @@ class Trip(BaseModel):
     trip_no_for_tm: Optional[int] = None  # Nth trip for this TM in the schedule
     cushion_time: Optional[int] = None
     plant_name: Optional[str] = None
+    tm_status: Optional[str] = "active"
     
     model_config = ConfigDict(
         populate_by_name=True,

@@ -1,7 +1,9 @@
 import asyncio
 from pymongo import DESCENDING
-from app.db.mongodb import schedules, transit_mixers
+from app.db.mongodb import schedules, transit_mixers, pumps as pumps_db
+from app.models.pump import PumpModel
 from app.models.schedule import BurstTrip, Cancelation, DeleteType, GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip, AvailabilityBody
+from app.models.transit_mixer import TransitMixerModel
 from app.services.plant_service import get_all_plants, get_plant
 from app.services.project_service import get_all_projects, get_project
 from app.services.pump_service import get_all_pumps
@@ -148,6 +150,7 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                 if tm_id and tm_id in tm_map:
                     trip["tm_no"] = tm_map[tm_id]["identifier"]
                     trip["plant_name"] = tm_map[tm_id]["plant_name"]
+                    trip["tm_status"] = tm_map[tm_id]["status"] if "status" in tm_map[tm_id] else "active"
 
         # Add project name and mother plant name to the schedule's response
         project = await get_project(schedule.get("project_id", None), user_id)
@@ -453,12 +456,15 @@ async def _get_tm_ids_and_pump_ids_by_schedule_date(target_datetime: date, user_
     return tm_ids, pump_ids
 
 async def get_available_tms_pumps(user_id: str, schedule_datetime: datetime) -> Tuple[Dict[str, Any]]:
-    tms = await get_all_tms(user_id)
-    pumps = await get_all_pumps(user_id)
+    tms: List[TransitMixerModel] = await transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None)
+    pumps: List[PumpModel] = await pumps_db.find({"user_id": ObjectId(user_id)}).to_list(length=None)
     used_tms, used_pumps = await _get_tm_ids_and_pump_ids_by_schedule_date(schedule_datetime, user_id)
     available_tm_list, available_pump_list = [], []
 
     for tm in tms:
+        tm = TransitMixerModel(**tm)
+        if tm.status != "active": 
+            continue
         available_tm_list.append({
             "id": str(tm.id),
             "identifier": tm.identifier,
@@ -468,6 +474,9 @@ async def get_available_tms_pumps(user_id: str, schedule_datetime: datetime) -> 
             "unavailable_times": used_tms[str(tm.id)] if str(tm.id) in used_tms else None,
         })
     for pump in pumps:
+        pump = PumpModel(**pump)
+        if pump.status != "active":
+            continue
         available_pump_list.append({
             **pump.model_dump(by_alias=True),
             "id": str(pump.id),
