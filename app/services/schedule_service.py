@@ -838,11 +838,14 @@ def burst_schedule(
 
         if trip_no == 1:
             target_buffer_start_for_current_trip = pump_available_time - timedelta(minutes=onward_time+buffer_time+load_time)
+            print('First trip', target_buffer_start_for_current_trip)
         elif trip_no <= tm_queue + 1:
             target_buffer_start_for_current_trip = plant_buffer + timedelta(minutes=load_time+buffer_time+1)
+            print('Second half trip', target_buffer_start_for_current_trip)
         else:
             print(plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1), "head", headway_time)
-            target_buffer_start_for_current_trip = max(plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1+onward_time+buffer_time+load_time))
+            target_buffer_start_for_current_trip = max(plant_buffer + timedelta(minutes=load_time+buffer_time+1), plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1+onward_time+buffer_time+load_time))
+            print('Third half trip', target_buffer_start_for_current_trip)
 
         for tm in selected_tms:
             # Calculate when TM becomes available after buffer and loading time
