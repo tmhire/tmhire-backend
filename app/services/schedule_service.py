@@ -27,36 +27,46 @@ UNLOADING_TIME_LOOKUP = {
     12: 20
 }
 
-async def get_all_schedules(user_id: str, type: ScheduleType, date: date | str = datetime.now().date(), isFromReports = False) -> List[ScheduleModel]:
+async def get_all_schedules(user_id: str, type: ScheduleType, from_date: date | str = datetime.now().date(), to_date: date | str = datetime.now().date(), isFromReports = False) -> List[ScheduleModel]:
     schedule_list = []
     query = {"user_id": ObjectId(user_id)}
     if type != ScheduleType.all:
         query["type"] = type.value
 
     if isFromReports:
-        if isinstance(date, str):
+        if isinstance(from_date, str):
             try:
-                date = datetime.fromisoformat(date).date()
+                from_date = datetime.fromisoformat(from_date).date()
             except ValueError:
                 try:
-                    date = datetime.strptime(date, "%Y-%m-%d").date()
+                    from_date = datetime.strptime(from_date, "%Y-%m-%d").date()
                 except ValueError:
-                    date = datetime.now().date()
-        elif isinstance(date, datetime):
-            date = date.date()
-        start_of_day = datetime.combine(date, time.min)
-        end_of_day = datetime.combine(date, time.max)
+                    from_date = datetime.now().date()
+        elif isinstance(from_date, datetime):
+            from_date = date.date()
+        if isinstance(to_date, str):
+            try:
+                to_date = datetime.fromisoformat(to_date).date()
+            except ValueError:
+                try:
+                    to_date = datetime.strptime(to_date, "%Y-%m-%d").date()
+                except ValueError:
+                    to_date = datetime.now().date()
+        elif isinstance(to_date, datetime):
+            to_date = date.date()
+        start_date = datetime.combine(from_date, time.min)
+        end_date = datetime.combine(to_date, time.max)
         query["$or"] = [
             {
                 "output_table.plant_start": {
-                    "$gte": start_of_day.isoformat(),
-                    "$lt": end_of_day.isoformat()
+                    "$gte": start_date.isoformat(),
+                    "$lt": end_date.isoformat()
                 }
             },
             {
                 "output_table.return": {
-                    "$gte": start_of_day.isoformat(),
-                    "$lt": end_of_day.isoformat()
+                    "$gte": start_date.isoformat(),
+                    "$lt": end_date.isoformat()
                 }
             }
         ]
