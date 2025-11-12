@@ -1002,7 +1002,7 @@ async def get_plant_gantt_data(
             load_time = math.ceil((avg_tm_capacity / (capacity / 60)) / 5) * 5
             if load_time <= 0:
                 return 0
-            return 60 / load_time
+            return math.ceil(60 / load_time)
         return 0
 
     plants_rows: Dict[str, PlantGanttRow] = {}
