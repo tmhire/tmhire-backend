@@ -55,10 +55,13 @@ class User(BaseModel):
     email: str
     new_user: bool
     contact: int | None
-    company_id: str
-    role: Literal["super_admin", "company_admin", "user"] = None
-    sub_role: Literal["viewer", "editor"] = None
-    status: Literal["pending", "approved", "revoked"] = None
+    company_id: str | None = None
+    role: Literal["super_admin", "company_admin", "user"] | None = None
+    sub_role: Literal["viewer", "editor"] | None = None
+    status: Literal["pending", "approved", "revoked"] | None = None
+    access_token: str
+    refresh_token: str
+    token_type: str
     
     class Config:
         schema_extra = {

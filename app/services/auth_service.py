@@ -30,10 +30,8 @@ async def get_user_by_email(email: str) -> Optional[UserModel]:
     """Get a user by email"""
     user = await users.find_one({"email": email})
     if user:
-        # Keep the password field here so callers that need to verify
-        # credentials (e.g. sign-in) have access to the hashed password.
-        # Any sanitization for responses to clients should be done at the
-        # route/response layer rather than here.
+        if user["company"]:
+            del user["company"]
         return UserModel(**user)
     return None
 
