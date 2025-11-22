@@ -122,6 +122,7 @@ async def login_user(user_data: UserLogin):
         user = await get_user_by_email(user_data.email)
         if not user or not verify_password(user_data.password, user.password):
             print("Incorrect password")
+            print(user_data.password, user.password)
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         access_token = create_access_token(
@@ -156,6 +157,7 @@ async def login_user(user_data: UserLogin):
         )
     
     except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e) or "Invalid authentication credentials",

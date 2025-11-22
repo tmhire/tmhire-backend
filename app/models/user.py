@@ -12,9 +12,9 @@ class UserModel(BaseModel):
     new_user: bool = Field(default=True, description="Indicates if the user is new")
     contact: Optional[int] = Field(default=None, description="Phone number of the user")
     company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
-    role: Literal["super_admin", "company_admin", "user"] = None
-    sub_role: Literal["viewer", "editor"] = None
-    status: Literal["pending", "approved", "revoked"] = None
+    role: Literal["super_admin", "company_admin", "user"] | None = None
+    sub_role: Literal["viewer", "editor"] | None = None
+    status: Literal["pending", "approved", "revoked"] | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -43,9 +43,9 @@ class UserCreate(BaseModel):
     new_user: bool = Field(default=True, description="Indicates if the user is new")
     contact: Optional[int] = Field(default=None, description="Phone number of the user")
     company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
-    role: Literal["super_admin", "company_admin", "user"]
-    sub_role: Literal["viewer", "editor"] = "viewer"
-    status: Literal["pending", "approved", "revoked"] = "pending"
+    role: Literal["super_admin", "company_admin", "user"] | None
+    sub_role: Literal["viewer", "editor"] | None = "viewer"
+    status: Literal["pending", "approved", "revoked"] | None = "pending"
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -72,9 +72,9 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     contact: Optional[int] = None
     company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
-    role: Literal["super_admin", "company_admin", "user"]
-    sub_role: Literal["viewer", "editor"]
-    status: Literal["pending", "approved", "revoked"]
+    role: Literal["super_admin", "company_admin", "user"] | None = None
+    sub_role: Literal["viewer", "editor"] | None = None
+    status: Literal["pending", "approved", "revoked"] | None = None
 
     model_config = ConfigDict(
         json_schema_extra={

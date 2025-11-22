@@ -30,9 +30,10 @@ async def get_user_by_email(email: str) -> Optional[UserModel]:
     """Get a user by email"""
     user = await users.find_one({"email": email})
     if user:
-        if user["company"]:
-            del user["company"]
-            await update_user_data(user["id"], user, user)
+        # Keep the password field here so callers that need to verify
+        # credentials (e.g. sign-in) have access to the hashed password.
+        # Any sanitization for responses to clients should be done at the
+        # route/response layer rather than here.
         return UserModel(**user)
     return None
 
@@ -84,7 +85,7 @@ async def onboard_user(company_data, current_user: UserModel):
         user_data["role"] = role
         user_data["sub_role"] = "viewer"
         user_data["status"] = "pending"
-    return await update_user_data(current_user.id, UserUpdate(user_data), current_user=current_user)
+    return await update_user_data(current_user.id, UserUpdate(**user_data), current_user=current_user)
 
 async def update_user_data(user_id: str, user: UserUpdate, current_user: UserModel):
     """Update a user"""
