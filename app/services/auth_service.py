@@ -1,5 +1,6 @@
 from bson import ObjectId
 from app.db.mongodb import users
+from app.models.company import CompanyModel
 from app.models.user import UserModel, UserCreate, UserUpdate
 from datetime import datetime, timedelta
 from typing import Optional
@@ -10,6 +11,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from passlib.context import CryptContext
+
+from app.services.company_service import create_company
 
 
 # Use HTTPBearer instead of OAuth2PasswordBearer
@@ -27,6 +30,9 @@ async def get_user_by_email(email: str) -> Optional[UserModel]:
     """Get a user by email"""
     user = await users.find_one({"email": email})
     if user:
+        if user["company"]:
+            del user["company"]
+            await update_user_data(user["id"], user, user)
         return UserModel(**user)
     return None
 
@@ -42,6 +48,8 @@ async def create_user(user: UserCreate) -> UserModel:
     user_data = user.model_dump()
     user_data["created_at"] = datetime.utcnow()
     user_data["last_updated"] = datetime.utcnow()
+    user_data["status"] = "pending"
+    user_data["role"] = "viewer"
 
     # Check if user already exists
     existing_user = await users.find_one({"email": user_data["email"]})
@@ -60,14 +68,38 @@ async def create_user(user: UserCreate) -> UserModel:
     new_user = await users.find_one({"_id": result.inserted_id})
     return UserModel(**new_user)
 
-async def update_user_data(user_id: str, user: UserUpdate):
+async def onboard_user(company_data, current_user: UserModel):
+    """Onboard a user"""
+
+    role = company_data["role"]
+    user_data = {}
+    if role == "company_admin":
+        company = create_company(company_data)
+        user_data["company_id"] = company["id"]
+        user_data["role"] = role
+        user_data["sub_role"] = "viewer"
+        user_data["status"] = "pending"
+    else:
+        user_data["company_id"] = company_data["id"]
+        user_data["role"] = role
+        user_data["sub_role"] = "viewer"
+        user_data["status"] = "pending"
+    return await update_user_data(current_user.id, UserUpdate(user_data), current_user=current_user)
+
+async def update_user_data(user_id: str, user: UserUpdate, current_user: UserModel):
     """Update a user"""
+
     user_data = {k: v for k, v in user.model_dump().items() if v is not None}
-    
+    existing_user = (await get_user(user_id)).model_dump()
+
+    if current_user.id != user_id:
+        latest_company_id = user_data["company_id"] or existing_user["company_id"]
+        if latest_company_id != current_user.company_id or current_user.role != "company_admin":
+            raise HTTPException(status_code=403, detail="User not allowed to edit the given person")
+
     if "password" in user_data and user_data["password"]:
         user_data["password"] = hash_password(user_data["password"])
 
-    existing_user = (await get_user(user_id)).model_dump()
     isNewUser = True
     if all(
         (key in existing_user and existing_user[key] is not None) or (key in user_data and user_data[key] is not None)

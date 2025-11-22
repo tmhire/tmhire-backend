@@ -1,7 +1,8 @@
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
+from app.models.company import CompanyModel
 from app.models.user import UserLogin, UserModel, UserCreate, UserUpdate
-from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, refreshing_access_token, update_user_data, validate_google_token, verify_password
+from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, onboard_user, refreshing_access_token, update_user_data, validate_google_token, verify_password
 from datetime import timedelta
 from pydantic import BaseModel
 from app.schemas.response import StandardResponse
@@ -53,14 +54,11 @@ class User(BaseModel):
     name: str
     email: str
     new_user: bool
-    company: str | None
-    city: str | None
     contact: int | None
-    preferred_format: Literal["12h", "24h"]
-    custom_start_hour: float
-    access_token: str
-    refresh_token: str
-    token_type: str
+    company_id: str
+    role: Literal["super_admin", "company_admin", "user"] = None
+    sub_role: Literal["viewer", "editor"] = None
+    status: Literal["pending", "approved", "revoked"] = None
     
     class Config:
         schema_extra = {
@@ -127,7 +125,7 @@ async def login_user(user_data: UserLogin):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         access_token = create_access_token(
-            data={"sub": user.email}, 
+            data={"sub": user.email},
             expires_delta=timedelta(minutes=1440)
         )
         
@@ -135,17 +133,17 @@ async def login_user(user_data: UserLogin):
             data={"sub": user.email}, 
             expires_delta=timedelta(days=30)
         )
-
+        
         user_data = {
                 "id": str(user.id),
                 "name": user.name,
                 "email": user.email,
                 "new_user": user.new_user,
-                "company": user.company,
-                "city": user.city,
+                "company_id": user.company_id,
                 "contact": user.contact,
-                "preferred_format": user.preferred_format,
-                "custom_start_hour": user.custom_start_hour,
+                "role": user.role,
+                "sub_role": user.sub_role,
+                "status": user.status,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
@@ -256,7 +254,7 @@ async def refresh_access_token(request: RefreshTokenRequest):
 @router.put("/update", response_model=StandardResponse[UserModel])
 async def update_user(user_data: UserUpdate, current_user: UserModel = Depends(get_current_user)):
     try:
-        user = await update_user_data(current_user.id, user_data)
+        user = await update_user_data(current_user.id, user_data, current_user=current_user)
         return StandardResponse(
             success=True,
             message="User updated successfully",
@@ -288,3 +286,32 @@ async def get_profile(current_user: UserModel = Depends(get_current_user)):
             detail=str(e) or "Failed to retrieve profile",
         )
 
+@router.put("/{user_id}", response_model=StandardResponse[UserModel])
+async def update_user(user_id: str, user_data: UserUpdate, current_user: UserModel = Depends(get_current_user)):
+    try:
+        user = await update_user_data(user_id, user_data, current_user)
+        return StandardResponse(
+            success=True,
+            message="User updated successfully",
+            data=user
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or "Failed to update user",
+        )
+
+@router.put("/onboard", response_model=StandardResponse[UserModel])
+async def update_user(company_data, current_user: UserModel = Depends(get_current_user)):
+    try:
+        user = await onboard_user(company_data=company_data, current_user=current_user)
+        return StandardResponse(
+            success=True,
+            message="User updated successfully",
+            data=user
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or "Failed to update user",
+        )

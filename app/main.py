@@ -27,7 +27,7 @@ class CustomJSONResponse(JSONResponse):
         ).encode("utf-8")
 
 # Import routes
-from app.routes import projects, pumps, tms, schedules, auth, plants, schedule_calendar, clients, dashboard, team_members
+from app.routes import projects, pumps, tms, schedules, auth, plants, schedule_calendar, clients, dashboard, team_members, company
 
 # Create FastAPI app
 app = FastAPI(
@@ -83,6 +83,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include routers
 # edit
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(auth.router, prefix="/company", tags=["Company"])
 app.include_router(plants.router, prefix="/plants", tags=["Plants"])
 app.include_router(tms.router, prefix="/tms", tags=["Transit Mixers"])
 app.include_router(pumps.router, prefix="/pumps", tags=["Pumps"])

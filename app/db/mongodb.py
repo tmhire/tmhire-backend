@@ -19,6 +19,7 @@ database = client[DB_NAME]
 
 # Collections
 users = database.users
+companies = database.companies
 transit_mixers = database.transit_mixers
 schedules = database.schedules
 plants = database.plants
