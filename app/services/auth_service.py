@@ -11,7 +11,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from passlib.context import CryptContext
-
 from app.services.company_service import create_company
 
 

@@ -55,3 +55,8 @@ class CompanyCreate(BaseModel):
             }
         }
     )
+
+
+class ChangeStatus(BaseModel):
+    company_id: str
+    company_status: Literal["approved", "revoked"]
