@@ -29,8 +29,8 @@ async def get_user_by_email(email: str) -> Optional[UserModel]:
     """Get a user by email"""
     user = await users.find_one({"email": email})
     if user:
-        if user["company"]:
-            del user["company"]
+        # Safely remove the `company` field if it exists to avoid KeyError
+        user.pop("company", None)
         return UserModel(**user)
     return None
 
@@ -47,7 +47,8 @@ async def create_user(user: UserCreate) -> UserModel:
     user_data["created_at"] = datetime.utcnow()
     user_data["last_updated"] = datetime.utcnow()
     user_data["status"] = "pending"
-    user_data["role"] = "viewer"
+    user_data["role"] = "user"
+    user_data["sub_role"] = "viewer"
 
     # Check if user already exists
     existing_user = await users.find_one({"email": user_data["email"]})
@@ -68,24 +69,28 @@ async def create_user(user: UserCreate) -> UserModel:
 
 async def onboard_user(company, current_user: UserModel):
     """Onboard a user"""
-
+    print('company',company)
     company_data = company.model_dump()
     role = company_data["role"]
+    contact = company_data["contact"]
     user_data = {}
     if role == "company_admin":
         print("Creating comp")
         company = await create_company(company_data)
         print("Comp created")
         company = company.model_dump()
-        user_data["company_id"] = company["id"]
+        user_data["company_code"] = company["company_code"]
         user_data["role"] = role
+        user_data["contact"]= contact
         user_data["sub_role"] = "viewer"
         user_data["status"] = "pending"
-    else:
-        user_data["company_id"] = company_data["id"]
+    elif role == "user":
+        user_data["company_code"] = company_data["company_code"]
         user_data["role"] = role
+        user_data["contact"]= contact
         user_data["sub_role"] = "viewer"
         user_data["status"] = "pending"
+    print("user_data",user_data)
     return await update_user_data(current_user.id, UserUpdate(**user_data), current_user=current_user)
 
 async def update_user_data(user_id: str, user: UserUpdate, current_user: UserModel):

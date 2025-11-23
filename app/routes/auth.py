@@ -98,11 +98,11 @@ async def signup(user_data: UserCreate):
                 "name": user.name,
                 "email": user.email,
                 "new_user": user.new_user,
-                "company": user.company,
-                "city": user.city,
+                "company_id": str(user.company_id) if user.company_id else None,
+                "city": getattr(user, "city", None),
                 "contact": user.contact,
-                "preferred_format": user.preferred_format,
-                "custom_start_hour": user.custom_start_hour,
+                "preferred_format": getattr(user, "preferred_format", None),
+                "custom_start_hour": getattr(user, "custom_start_hour", None),
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"
@@ -211,11 +211,11 @@ async def login_google(token_data: GoogleToken):
 
         token_data = {
             "new_user": user.new_user,
-            "company": user.company,
-            "city": user.city,
+            "company": str(user.company_id) if user.company_id else None,
+            "city": getattr(user, "city", None),
             "contact": user.contact,
-            "preferred_format": user.preferred_format,
-            "custom_start_hour": user.custom_start_hour,
+            "preferred_format": getattr(user, "preferred_format", None),
+            "custom_start_hour": getattr(user, "custom_start_hour", None),
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer"

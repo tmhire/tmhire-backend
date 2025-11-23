@@ -39,6 +39,7 @@ class CompanyCreate(BaseModel):
     company_name: str | None = None
     status: Literal["pending", "approved", "revoked"] | None = None
     city: str | None = None
+    contact: str | None = None
     preferred_format: Literal["12h", "24h"] = "24h"
     custom_start_hour: float = 0.0
 
@@ -47,6 +48,7 @@ class CompanyCreate(BaseModel):
             "example": {
                 "role": "company_admin",
                 "company_code": "MCF",
+                "contact": "1234567890",
                 "company_name": "Main Concrete Firm",
                 "revoked_status": False,
                 "city": "Coimbatore",
