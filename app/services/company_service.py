@@ -27,14 +27,15 @@ async def get_company(id: str) -> Optional[CompanyModel]:
         return CompanyModel(**company)
     return None
 
-async def create_company(company: CompanyCreate) -> CompanyModel:
+async def create_company(company_data: CompanyCreate) -> CompanyModel:
     """Create a new company"""
-    company_data = company.model_dump()
     company_data["created_at"] = datetime.utcnow()
     company_data["last_updated"] = datetime.utcnow()
+    company_data["status"] = "pending"
+    company_data["company_code"] = company_data["company_code"].upper()
 
     # Check if company already exists
-    existing_company = await get_company_by_code(company["company_code"])
+    existing_company = await get_company_by_code(company_data["company_code"])
     if existing_company:
         print("Company already exists")
         raise HTTPException(status_code=400, detail="Company already exists")

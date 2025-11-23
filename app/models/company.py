@@ -33,16 +33,19 @@ class CompanyModel(BaseModel):
     )
 
 class CompanyCreate(BaseModel):
-    company_code: str
-    company_name: Optional[str] = Field(default=None, description="Company that the user works for")
-    status: Literal["pending", "approved", "revoked"] = "pending"
-    city: Optional[str] = Field(default=None, description="Location of the user")
-    preferred_format: Optional[Literal["12h", "24h"]] = "24h"
-    custom_start_hour: Optional[float] = 0.0
+    role: Literal["company_admin", "user"]
+    id: str | None = None
+    company_code: str | None = None
+    company_name: str | None = None
+    status: Literal["pending", "approved", "revoked"] | None = None
+    city: str | None = None
+    preferred_format: Literal["12h", "24h"] = "24h"
+    custom_start_hour: float = 0.0
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
+                "role": "company_admin",
                 "company_code": "MCF",
                 "company_name": "Main Concrete Firm",
                 "revoked_status": False,

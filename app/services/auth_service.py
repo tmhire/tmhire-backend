@@ -67,13 +67,17 @@ async def create_user(user: UserCreate) -> UserModel:
     new_user = await users.find_one({"_id": result.inserted_id})
     return UserModel(**new_user)
 
-async def onboard_user(company_data, current_user: UserModel):
+async def onboard_user(company, current_user: UserModel):
     """Onboard a user"""
 
+    company_data = company.model_dump()
     role = company_data["role"]
     user_data = {}
     if role == "company_admin":
-        company = create_company(company_data)
+        print("Creating comp")
+        company = await create_company(company_data)
+        print("Comp created")
+        company = company.model_dump()
         user_data["company_id"] = company["id"]
         user_data["role"] = role
         user_data["sub_role"] = "viewer"

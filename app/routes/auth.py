@@ -1,6 +1,6 @@
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.models.company import CompanyModel
+from app.models.company import CompanyCreate, CompanyModel
 from app.models.user import UserLogin, UserModel, UserCreate, UserUpdate
 from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, onboard_user, refreshing_access_token, update_user_data, validate_google_token, verify_password
 from datetime import timedelta
@@ -291,13 +291,13 @@ async def get_profile(current_user: UserModel = Depends(get_current_user)):
             detail=str(e) or "Failed to retrieve profile",
         )
 
-@router.put("/{user_id}", response_model=StandardResponse[UserModel])
-async def update_user(user_id: str, user_data: UserUpdate, current_user: UserModel = Depends(get_current_user)):
+@router.put("/onboard", response_model=StandardResponse[UserModel])
+async def onboard(company_data: CompanyCreate, current_user: UserModel = Depends(get_current_user)):
     try:
-        user = await update_user_data(user_id, user_data, current_user)
+        user = await onboard_user(company=company_data, current_user=current_user)
         return StandardResponse(
             success=True,
-            message="User updated successfully",
+            message="User onboarded successfully",
             data=user
         )
     except Exception as e:
@@ -306,10 +306,11 @@ async def update_user(user_id: str, user_data: UserUpdate, current_user: UserMod
             detail=str(e) or "Failed to update user",
         )
 
-@router.put("/onboard", response_model=StandardResponse[UserModel])
-async def update_user(company_data, current_user: UserModel = Depends(get_current_user)):
+
+@router.put("/{user_id}", response_model=StandardResponse[UserModel])
+async def update_user(user_id: str, user_data: UserUpdate, current_user: UserModel = Depends(get_current_user)):
     try:
-        user = await onboard_user(company_data=company_data, current_user=current_user)
+        user = await update_user_data(user_id, user_data, current_user)
         return StandardResponse(
             success=True,
             message="User updated successfully",

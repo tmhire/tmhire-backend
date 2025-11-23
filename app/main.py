@@ -83,7 +83,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Include routers
 # edit
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(auth.router, prefix="/company", tags=["Company"])
+app.include_router(company.router, prefix="/company", tags=["Company"])
 app.include_router(plants.router, prefix="/plants", tags=["Plants"])
 app.include_router(tms.router, prefix="/tms", tags=["Transit Mixers"])
 app.include_router(pumps.router, prefix="/pumps", tags=["Pumps"])
