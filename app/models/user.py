@@ -43,7 +43,7 @@ class UserCreate(BaseModel):
     new_user: bool = Field(default=True, description="Indicates if the user is new")
     contact: Optional[int] = Field(default=None, description="Phone number of the user")
     company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
-    role: Literal["super_admin", "company_admin", "user"] | None
+    role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = "viewer"
     status: Literal["pending", "approved", "revoked"] | None = "pending"
 
