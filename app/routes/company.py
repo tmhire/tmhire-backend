@@ -5,7 +5,7 @@ from app.models.user import UserModel
 from app.services.auth_service import get_current_user
 from typing import List, Literal
 from app.schemas.response import StandardResponse
-from app.services.company_service import get_all_companies, get_users_from_company, update_company
+from app.services.company_service import change_company_status, get_all_companies, get_users_from_company, update_company
 
 router = APIRouter(tags=["Company"])
 
@@ -39,7 +39,7 @@ async def change_status(company_data: ChangeStatus, current_user: UserModel = De
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    users = await update_company(current_user.company_id)
+    users = await change_company_status(company_data)
     return StandardResponse(
         success=True,
         message="Company users retrieved successfully",
