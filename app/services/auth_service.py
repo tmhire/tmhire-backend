@@ -46,7 +46,7 @@ async def create_user(user: UserCreate) -> UserModel:
     user_data = user.model_dump()
     user_data["created_at"] = datetime.utcnow()
     user_data["last_updated"] = datetime.utcnow()
-    user_data["status"] = "pending"
+    user_data["account_status"] = "pending"
     user_data["role"] = "user"
     user_data["sub_role"] = "viewer"
 
@@ -79,18 +79,17 @@ async def onboard_user(company, current_user: UserModel):
         company = await create_company(company_data)
         print("Comp created")
         company = company.model_dump()
-        user_data["company_code"] = company["company_code"]
+        user_data["company_id"] = company["company_id"]
         user_data["role"] = role
         user_data["contact"]= contact
         user_data["sub_role"] = "viewer"
-        user_data["status"] = "pending"
+        user_data["account_status"] = "approved"
     elif role == "user":
-        user_data["company_code"] = company_data["company_code"]
+        user_data["company_id"] = company_data["company_id"]
         user_data["role"] = role
         user_data["contact"]= contact
         user_data["sub_role"] = "viewer"
-        user_data["status"] = "pending"
-    print("user_data",user_data)
+        user_data["account_status"] = "pending"
     return await update_user_data(current_user.id, UserUpdate(**user_data), current_user=current_user)
 
 async def update_user_data(user_id: str, user: UserUpdate, current_user: UserModel):

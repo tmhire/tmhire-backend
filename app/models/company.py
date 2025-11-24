@@ -8,7 +8,7 @@ class CompanyModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     company_code: str
     company_name: Optional[str] = Field(default=None, description="Company that the user works for")
-    status: Literal["pending", "approved", "revoked"]
+    company_status: Literal["pending", "approved", "revoked"]
     city: Optional[str] = Field(default=None, description="Location of the user")
     preferred_format: Optional[Literal["12h", "24h"]] = "24h"
     custom_start_hour: Optional[float] = 0.0
@@ -23,7 +23,7 @@ class CompanyModel(BaseModel):
                 "id": "60d5ec9af682fcd81a060e72",
                 "company_code": "MCF",
                 "company_name": "Main Concrete Firm",
-                "revoked_status": False,
+                "company_status": False,
                 "city": "Coimbatore",
                 "preferred_format": "24h",
                 "custom_start_hour": 0.0,
@@ -37,7 +37,7 @@ class CompanyCreate(BaseModel):
     id: str | None = None
     company_code: str | None = None
     company_name: str | None = None
-    status: Literal["pending", "approved", "revoked"] | None = None
+    company_status: Literal["pending", "approved", "revoked"] | None = None
     city: str | None = None
     contact: str | None = None
     preferred_format: Literal["12h", "24h"] = "24h"
@@ -50,7 +50,7 @@ class CompanyCreate(BaseModel):
                 "company_code": "MCF",
                 "contact": "1234567890",
                 "company_name": "Main Concrete Firm",
-                "revoked_status": False,
+                "company_status": False,
                 "city": "Coimbatore",
                 "preferred_format": "24h",
                 "custom_start_hour": 0.0,

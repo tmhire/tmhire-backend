@@ -58,7 +58,7 @@ class User(BaseModel):
     company_id: str | None = None
     role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = None
-    status: Literal["pending", "approved", "revoked"] | None = None
+    account_status: Literal["pending", "approved", "revoked"] | None = None
     access_token: str
     refresh_token: str
     token_type: str
@@ -147,7 +147,7 @@ async def login_user(user_data: UserLogin):
                 "contact": user.contact,
                 "role": user.role,
                 "sub_role": user.sub_role,
-                "status": user.status,
+                "account_status": user.account_status,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_type": "bearer"

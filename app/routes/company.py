@@ -5,18 +5,37 @@ from app.models.user import UserModel
 from app.services.auth_service import get_current_user
 from typing import List, Literal
 from app.schemas.response import StandardResponse
-from app.services.company_service import change_company_status, get_all_companies, get_users_from_company, update_company
+from app.services.company_service import change_company_status, get_all_companies, get_company_by_code, get_users_from_company, update_company, get_company
 
 router = APIRouter(tags=["Company"])
 
 @router.get("/", response_model=StandardResponse[List[CompanyModel]])
-async def get_companies(current_user: UserModel = Depends(get_current_user)):
+async def get_companies():
     """Get all companies"""
     companies = await get_all_companies()
     return StandardResponse(
         success=True,
         message="Companies retrieved successfully",
         data=companies
+    )
+
+@router.get("/{company_primary_key}", response_model=StandardResponse[CompanyModel])
+async def get_company_by_company_id(company_primary_key: str, type: Literal["company_id", "company_code"], current_user: UserModel = Depends(get_current_user)):
+    """Get company from company id"""
+    if type == "company_id":
+        company = await get_company(company_primary_key)
+    elif type == "company_code":
+        company = await get_company_by_code(company_primary_key)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail= "Invalid type of unique identifier",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return StandardResponse(
+        success=True,
+        message="Company retrieved successfully",
+        data=company
     )
 
 @router.get("/all_users", response_model=StandardResponse[List[UserModel]])

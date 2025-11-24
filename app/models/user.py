@@ -14,7 +14,7 @@ class UserModel(BaseModel):
     company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
     role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = None
-    status: Literal["pending", "approved", "revoked"] | None = None
+    account_status: Literal["pending", "approved", "revoked"] | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     model_config = ConfigDict(
@@ -30,7 +30,7 @@ class UserModel(BaseModel):
                 "company_id": "{company_id}",
                 "role": "user",
                 "sub_role": "editor",
-                "status": "approved",
+                "account_status": "approved",
                 "created_at": datetime.utcnow()
             }
         }
@@ -45,7 +45,7 @@ class UserCreate(BaseModel):
     company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
     role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = "viewer"
-    status: Literal["pending", "approved", "revoked"] | None = "pending"
+    account_status: Literal["pending", "approved", "revoked"] | None = "pending"
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -58,7 +58,7 @@ class UserCreate(BaseModel):
                 "company_id": "{company_id}",
                 "role": "user",
                 "sub_role": "editor",
-                "status": "approved",
+                "account_status": "approved",
             }
         }
     ) 
@@ -74,7 +74,7 @@ class UserUpdate(BaseModel):
     company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
     role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = None
-    status: Literal["pending", "approved", "revoked"] | None = None
+    account_status: Literal["pending", "approved", "revoked"] | None = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -85,7 +85,7 @@ class UserUpdate(BaseModel):
                 "company_id": "{company_id}",
                 "role": "user",
                 "sub_role": "editor",
-                "status": "approved",
+                "account_status": "approved",
             }
         }
     ) 
