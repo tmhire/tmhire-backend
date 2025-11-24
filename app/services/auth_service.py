@@ -105,11 +105,11 @@ async def update_user_data(user_id: str, user: UserUpdate, current_user: UserMod
     existing_user = (await get_user(user_id)).model_dump()
 
     if current_user.id != user_id:
-        latest_company_id = user_data["company_id"] or existing_user["company_id"]
+        latest_company_id = user_data.get("company_id", None) or existing_user.get("company_id", None)
         if latest_company_id != current_user.company_id or current_user.role != "company_admin":
             raise HTTPException(status_code=403, detail="User not allowed to edit the given person")
 
-    if "password" in user_data and user_data["password"]:
+    if "password" in user_data and user_data.get("password", None):
         user_data["password"] = hash_password(user_data["password"])
 
     isNewUser = True
@@ -135,7 +135,7 @@ async def update_user_data(user_id: str, user: UserUpdate, current_user: UserMod
         if company_data.get(key, None):
             company_data["company_id"] = company_data[key]
             del company_data[key]
-    return {**latest_user.model_dump(), **company.model_dump()}
+    return {**latest_user.model_dump(), **company_data}
 
 def hash_password(password: str):
     return pwd_context.hash(password)
