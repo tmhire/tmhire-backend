@@ -48,14 +48,13 @@ async def get_users(current_user: UserModel = Depends(get_current_user)):
         data=users
     )
 
-@router.put("/{company_primary_key}", response_model=StandardResponse[CompanyModel])
+@router.put("/update", response_model=StandardResponse[CompanyModel])
 async def change_status(
-    company_primary_key: str, 
     company_data: CompanyUpdate, 
     current_user: UserModel = Depends(get_current_user)
 ):
     """Change company status"""
-    if current_user.role != "super_admin":
+    if current_user.role != "company_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail= "User not super admin",
