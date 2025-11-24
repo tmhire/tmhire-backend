@@ -313,18 +313,19 @@ async def get_profile(current_user: UserModel = Depends(get_current_user)):
     """
     try:
         company_data = {}
-        if current_user.company_id:
-            company = await get_company(str(current_user.company_id))
+        user = current_user.model_dump()
+        if user["company_id"]:
+            company = await get_company(str(user["company_id"]))
             if company:
                 company_data = company.model_dump()
                 for key in ["id", "_id"]:
                     if company_data.get(key, None):
                         del company_data[key]
-        current_user["company_id"] = str(current_user["company_id"])
+        user["company_id"] = str(user["company_id"])
         return StandardResponse(
             success=True,
             message="Profile retrieved successfully",
-            data={**current_user, **company_data}
+            data={**user, **company_data}
         )
     except Exception as e:
         raise HTTPException(
