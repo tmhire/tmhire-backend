@@ -96,7 +96,7 @@ async def onboard_user(company: CompanyCreate, current_user: UserModel):
     user_data["contact"]= contact
 
     user = await update_user_data(current_user.id, UserUpdate(**user_data), current_user=current_user)
-    return CompanyUserModel(**user, **company)
+    return user
 
 async def update_user_data(user_id: str, user: UserUpdate, current_user: UserModel):
     """Update a user"""
@@ -130,7 +130,7 @@ async def update_user_data(user_id: str, user: UserUpdate, current_user: UserMod
     
     latest_user = await get_user(user_id)
     company = await get_company(latest_user.company_id)
-    return {**latest_user, **company}
+    return {**latest_user.model_dump(), **company.model_dump()}
 
 def hash_password(password: str):
     return pwd_context.hash(password)
