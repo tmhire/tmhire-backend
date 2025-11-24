@@ -40,7 +40,7 @@ async def create_company(company_data: CompanyCreate) -> CompanyModel:
     """Create a new company"""
     company_data["created_at"] = datetime.utcnow()
     company_data["last_updated"] = datetime.utcnow()
-    company_data["status"] = "pending"
+    company_data["company_status"] = "pending"
     company_data["company_code"] = company_data["company_code"].upper()
 
     # Check if company already exists
@@ -84,7 +84,7 @@ async def change_company_status(company: ChangeStatus):
         print("Company does not exist")
         raise HTTPException(status_code=400, detail="Company does not exist")
 
-    updated_company = {**existing_company, "status": company_data["company_status"]}
+    updated_company = {**existing_company, "company_status": company_data["company_status"]}
 
     #Update company
     await companies.update_one(
