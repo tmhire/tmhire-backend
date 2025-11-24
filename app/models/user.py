@@ -13,7 +13,7 @@ class UserModel(BaseModel):
     name: str
     new_user: bool = Field(default=True, description="Indicates if the user is new")
     contact: Optional[int] = Field(default=None, description="Phone number of the user")
-    company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
+    company_id: Optional[PyObjectId | str] = Field(default=None, description="Company that the user works for")
     role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = None
     account_status: Literal["pending", "approved", "revoked"] | None = None
@@ -44,7 +44,7 @@ class UserCreate(BaseModel):
     name: str
     new_user: bool = Field(default=True, description="Indicates if the user is new")
     contact: Optional[int] = Field(default=None, description="Phone number of the user")
-    company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
+    company_id: Optional[PyObjectId | str] = Field(default=None, description="Company that the user works for")
     role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = "viewer"
     account_status: Literal["pending", "approved", "revoked"] | None = "pending"
@@ -73,7 +73,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     password: Optional[str] = None
     contact: Optional[int] = None
-    company_id: Optional[PyObjectId] = Field(default=None, description="Company that the user works for")
+    company_id: Optional[PyObjectId | str] = Field(default=None, description="Company that the user works for")
     role: Literal["super_admin", "company_admin", "user"] | None = None
     sub_role: Literal["viewer", "editor"] | None = None
     account_status: Literal["pending", "approved", "revoked"] | None = None
@@ -93,7 +93,7 @@ class UserUpdate(BaseModel):
     ) 
 
 class CompanyUserModel(UserModel):
-    company_id: Optional[PyObjectId] = ""
+    company_id: Optional[PyObjectId | str] | None = None
     company_code: str = ""
     company_name: Optional[str] = Field(default="", description="Company that the user works for")
     company_status: Literal["pending", "approved", "revoked"] = "pending"

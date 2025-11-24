@@ -135,12 +135,13 @@ async def login_user(user_data: UserLogin):
         company_data = {}
         if user.company_id:
             company = await get_company(str(user.company_id))
-            company_data = company.model_dump()
-            data["company_code"] = company_data["company_code"]
-            data["company_name"] = company_data["company_name"]
-            for key in ["id", "_id"]:
-                if company_data.get(key, None):
-                    del company_data[key]
+            if company:
+                company_data = company.model_dump()
+                data["company_code"] = company_data["company_code"]
+                data["company_name"] = company_data["company_name"]
+                for key in ["id", "_id"]:
+                    if company_data.get(key, None):
+                        del company_data[key]
 
         access_token = create_access_token(
             data=data,
@@ -157,7 +158,7 @@ async def login_user(user_data: UserLogin):
                 "name": user.name,
                 "email": user.email,
                 "new_user": user.new_user,
-                "company_id": user.company_id,
+                "company_id": str(user.company_id),
                 "contact": user.contact,
                 "role": user.role,
                 "sub_role": user.sub_role,
@@ -214,29 +215,33 @@ async def login_google(token_data: GoogleToken):
                 name=user_data["name"]
             ))
 
-        company = {}
+        company_data = {}
+        data={"sub": user.email}
         if user.company_id:
             company = await get_company(str(user.company_id))
-            company = company.model_dump()
-            for key in ["id", "_id"]:
-                if company.get(key, None):
-                    del company[key]
+            if company:
+                company_data = company.model_dump()
+                data["company_code"] = company_data["company_code"]
+                data["company_name"] = company_data["company_name"]
+                for key in ["id", "_id"]:
+                    if company_data.get(key, None):
+                        del company_data[key]
         
         # Create access token
         access_token = create_access_token(
-            data={"sub": user.email},
+            data=data,
             expires_delta=timedelta(minutes=1440)
         )
         
         #Create refresh token
         refresh_token = create_refresh_token(
-            data={"sub": user.email},
+            data=data,
             expires_delta=timedelta(days=30)
         )
 
         token_data = {
             "new_user": user.new_user,
-            "company": str(user.company_id) if user.company_id else None,
+            "company_id": str(user.company_id) if user.company_id else None,
             "city": getattr(user, "city", None),
             "contact": user.contact,
             "preferred_format": getattr(user, "preferred_format", None),
@@ -244,7 +249,7 @@ async def login_google(token_data: GoogleToken):
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
-            **company
+            **company_data
         }
 
         return StandardResponse(
@@ -314,6 +319,7 @@ async def get_profile(current_user: UserModel = Depends(get_current_user)):
             for key in ["id", "_id"]:
                 if company.get(key, None):
                     del company[key]
+        current_user["company_id"] = str(current_user["company_id"])
         return StandardResponse(
             success=True,
             message="Profile retrieved successfully",
