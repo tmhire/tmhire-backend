@@ -11,7 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from passlib.context import CryptContext
-from app.services.company_service import create_company, get_company
+from app.services.company_service import create_company, get_company, get_company_by_code
 
 
 # Use HTTPBearer instead of OAuth2PasswordBearer
@@ -81,7 +81,7 @@ async def onboard_user(company: CompanyCreate, current_user: UserModel):
         user_data["sub_role"] = "editor"
         user_data["account_status"] = "approved"
     elif role == "user":
-        company = await get_company(company_data["company_id"])
+        company = await get_company_by_code(company_data["company_code"])
         company = company.model_dump()
         user_data["sub_role"] = "viewer"
         user_data["account_status"] = "pending"
