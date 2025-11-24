@@ -4,6 +4,8 @@ from typing import Literal, Optional
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 
+from app.models.company import CompanyModel
+
 class UserModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     email: EmailStr
@@ -89,3 +91,13 @@ class UserUpdate(BaseModel):
             }
         }
     ) 
+
+class CompanyUserModel(UserModel):
+    company_id: Optional[PyObjectId] = ""
+    company_code: str = ""
+    company_name: Optional[str] = Field(default="", description="Company that the user works for")
+    company_status: Literal["pending", "approved", "revoked"] = "pending"
+    city: Optional[str] = Field(default="", description="Location of the user")
+    preferred_format: Optional[Literal["12h", "24h"]] = "24h"
+    custom_start_hour: Optional[float] = 0.0
+    created_at: datetime = Field(default_factory=datetime.utcnow)

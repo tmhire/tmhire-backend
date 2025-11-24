@@ -1,7 +1,7 @@
 from bson import ObjectId
 from app.db.mongodb import users
-from app.models.company import CompanyModel
-from app.models.user import UserModel, UserCreate, UserUpdate
+from app.models.company import CompanyCreate, CompanyModel
+from app.models.user import CompanyUserModel, UserModel, UserCreate, UserUpdate
 from datetime import datetime, timedelta
 from typing import Optional
 import os
@@ -11,7 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from passlib.context import CryptContext
-from app.services.company_service import create_company
+from app.services.company_service import create_company, get_company
 
 
 # Use HTTPBearer instead of OAuth2PasswordBearer
@@ -49,6 +49,7 @@ async def create_user(user: UserCreate) -> UserModel:
     user_data["account_status"] = "pending"
     user_data["role"] = "user"
     user_data["sub_role"] = "viewer"
+    user_data["new_user"] = True
 
     # Check if user already exists
     existing_user = await users.find_one({"email": user_data["email"]})
@@ -67,30 +68,35 @@ async def create_user(user: UserCreate) -> UserModel:
     new_user = await users.find_one({"_id": result.inserted_id})
     return UserModel(**new_user)
 
-async def onboard_user(company, current_user: UserModel):
+async def onboard_user(company: CompanyCreate, current_user: UserModel):
     """Onboard a user"""
-    print('company',company)
     company_data = company.model_dump()
     role = company_data["role"]
     contact = company_data["contact"]
+    del company_data["contact"], company_data["role"]
     user_data = {}
     if role == "company_admin":
-        print("Creating comp")
         company = await create_company(company_data)
-        print("Comp created")
         company = company.model_dump()
-        user_data["company_id"] = company["company_id"]
-        user_data["role"] = role
-        user_data["contact"]= contact
-        user_data["sub_role"] = "viewer"
+        user_data["sub_role"] = "editor"
         user_data["account_status"] = "approved"
     elif role == "user":
-        user_data["company_id"] = company_data["company_id"]
-        user_data["role"] = role
-        user_data["contact"]= contact
+        company = await get_company(company_data["company_id"])
+        company = company.model_dump()
         user_data["sub_role"] = "viewer"
         user_data["account_status"] = "pending"
-    return await update_user_data(current_user.id, UserUpdate(**user_data), current_user=current_user)
+    else:
+        raise HTTPException(status_code=400, detail="Role should be either company_admin or user")
+
+    for key in ["id", "_id"]:
+        if company.get(key, None):
+            user_data["company_id"] = company[key]
+            del company[key]
+    user_data["role"] = role
+    user_data["contact"]= contact
+
+    user = await update_user_data(current_user.id, UserUpdate(**user_data), current_user=current_user)
+    return CompanyUserModel(**user, **company)
 
 async def update_user_data(user_id: str, user: UserUpdate, current_user: UserModel):
     """Update a user"""
@@ -109,7 +115,7 @@ async def update_user_data(user_id: str, user: UserUpdate, current_user: UserMod
     isNewUser = True
     if all(
         (key in existing_user and existing_user[key] is not None) or (key in user_data and user_data[key] is not None)
-        for key in ["contact", "company", "city"]
+        for key in ["company_id", "contact"]
     ):
         isNewUser = False
     user_data["new_user"] = isNewUser
@@ -122,7 +128,9 @@ async def update_user_data(user_id: str, user: UserUpdate, current_user: UserMod
         {"$set": updated_user}
     )
     
-    return await get_user(user_id)
+    latest_user = await get_user(user_id)
+    company = await get_company(latest_user.company_id)
+    return {**latest_user, **company}
 
 def hash_password(password: str):
     return pwd_context.hash(password)
@@ -221,10 +229,8 @@ async def validate_google_token(token: str) -> dict:
     Raises:
         HTTPException: If token is invalid or verification fails.
     """
-    print("token",token)
     try:
         idinfo = id_token.verify_oauth2_token(token, requests.Request(), GOOGLE_CLIENT_ID)
-        print("idinfo",idinfo)
 
         # Check if the token is issued to your app
         if idinfo['aud'] != GOOGLE_CLIENT_ID:

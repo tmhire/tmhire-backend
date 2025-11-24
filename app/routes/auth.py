@@ -1,11 +1,12 @@
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.company import CompanyCreate, CompanyModel
-from app.models.user import UserLogin, UserModel, UserCreate, UserUpdate
+from app.models.user import CompanyUserModel, UserLogin, UserModel, UserCreate, UserUpdate
 from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, onboard_user, refreshing_access_token, update_user_data, validate_google_token, verify_password
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from app.schemas.response import StandardResponse
+from app.services.company_service import get_company
 
 router = APIRouter(tags=["Authentication"])
 
@@ -49,7 +50,7 @@ class TokenWithNewUser(BaseModel):
             }
         }
 
-class User(BaseModel):
+class User(CompanyUserModel):
     id: str
     name: str
     email: str
@@ -105,7 +106,9 @@ async def signup(user_data: UserCreate):
                 "custom_start_hour": getattr(user, "custom_start_hour", None),
                 "access_token": access_token,
                 "refresh_token": refresh_token,
-                "token_type": "bearer"
+                "token_type": "bearer",
+                "account_status": user.account_status or "pending",
+                "created_at":  user.created_at or datetime.utcnow
             }
         
         return StandardResponse(
@@ -127,14 +130,25 @@ async def login_user(user_data: UserLogin):
             print("Incorrect password")
             print(user_data.password, user.password)
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        data = {"sub": user.email}
+        company_data = {}
+        if user.company_id:
+            company = await get_company(str(user.company_id))
+            company_data = company.model_dump()
+            data["company_code"] = company_data["company_code"]
+            data["company_name"] = company_data["company_name"]
+            for key in ["id", "_id"]:
+                if company_data.get(key, None):
+                    del company_data[key]
 
         access_token = create_access_token(
-            data={"sub": user.email},
+            data=data,
             expires_delta=timedelta(minutes=1440)
         )
         
         refresh_token = create_refresh_token(
-            data={"sub": user.email}, 
+            data=data, 
             expires_delta=timedelta(days=30)
         )
         
@@ -150,7 +164,8 @@ async def login_user(user_data: UserLogin):
                 "account_status": user.account_status,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
-                "token_type": "bearer"
+                "token_type": "bearer",
+                **company_data
             }
                 
         return StandardResponse(
@@ -190,12 +205,22 @@ async def login_google(token_data: GoogleToken):
     try:
         # Validate the Google token
         user_data = await validate_google_token(token_data.token)
-        
-        # Create user if doesn't exist
-        user = await create_user(UserCreate(
-            email=user_data["email"],
-            name=user_data["name"]
-        ))
+
+        user = await get_user_by_email(user_data["email"])        
+        if not user:
+            # Create user if doesn't exist
+            user = await create_user(UserCreate(
+                email=user_data["email"],
+                name=user_data["name"]
+            ))
+
+        company = {}
+        if user.company_id:
+            company = await get_company(str(user.company_id))
+            company = company.model_dump()
+            for key in ["id", "_id"]:
+                if company.get(key, None):
+                    del company[key]
         
         # Create access token
         access_token = create_access_token(
@@ -218,7 +243,8 @@ async def login_google(token_data: GoogleToken):
             "custom_start_hour": getattr(user, "custom_start_hour", None),
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "token_type": "bearer"
+            "token_type": "bearer",
+            **company
         }
 
         return StandardResponse(
@@ -256,10 +282,11 @@ async def refresh_access_token(request: RefreshTokenRequest):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-@router.put("/update", response_model=StandardResponse[UserModel])
+@router.put("/update", response_model=StandardResponse[CompanyUserModel])
 async def update_user(user_data: UserUpdate, current_user: UserModel = Depends(get_current_user)):
     try:
         user = await update_user_data(current_user.id, user_data, current_user=current_user)
+            
         return StandardResponse(
             success=True,
             message="User updated successfully",
@@ -271,7 +298,7 @@ async def update_user(user_data: UserUpdate, current_user: UserModel = Depends(g
             detail=str(e) or "Failed to update user",
         )
 
-@router.get("/profile", response_model=StandardResponse[UserModel])
+@router.get("/profile", response_model=StandardResponse[CompanyUserModel])
 async def get_profile(current_user: UserModel = Depends(get_current_user)):
     """
     Get the profile information of the currently authenticated user.
@@ -280,10 +307,17 @@ async def get_profile(current_user: UserModel = Depends(get_current_user)):
     - User profile information including name, email, company, city, contact details
     """
     try:
+        company = {}
+        if current_user.company_id:
+            company = await get_company(str(current_user.company_id))
+            company = company.model_dump()
+            for key in ["id", "_id"]:
+                if company.get(key, None):
+                    del company[key]
         return StandardResponse(
             success=True,
             message="Profile retrieved successfully",
-            data=current_user
+            data={**current_user, **company}
         )
     except Exception as e:
         raise HTTPException(
@@ -291,7 +325,7 @@ async def get_profile(current_user: UserModel = Depends(get_current_user)):
             detail=str(e) or "Failed to retrieve profile",
         )
 
-@router.put("/onboard", response_model=StandardResponse[UserModel])
+@router.put("/onboard", response_model=StandardResponse[CompanyUserModel])
 async def onboard(company_data: CompanyCreate, current_user: UserModel = Depends(get_current_user)):
     try:
         user = await onboard_user(company=company_data, current_user=current_user)
