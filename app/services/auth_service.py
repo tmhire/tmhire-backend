@@ -130,6 +130,11 @@ async def update_user_data(user_id: str, user: UserUpdate, current_user: UserMod
     
     latest_user = await get_user(user_id)
     company = await get_company(latest_user.company_id)
+    company_data = company.model_dump()
+    for key in ["id", "_id"]:
+        if company_data.get(key, None):
+            company_data["company_id"] = company_data[key]
+            del company_data[key]
     return {**latest_user.model_dump(), **company.model_dump()}
 
 def hash_password(password: str):
