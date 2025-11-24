@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from app.models.company import ChangeStatus, CompanyModel
 from app.models.user import UserModel
@@ -20,7 +20,7 @@ async def get_companies():
     )
 
 @router.get("/{company_primary_key}", response_model=StandardResponse[CompanyModel])
-async def get_company_by_company_id(company_primary_key: str, type: Literal["company_id", "company_code"], current_user: UserModel = Depends(get_current_user)):
+async def get_company_by_company_id(company_primary_key: str, type: Literal["company_id", "company_code"] = Query("company_id", description="Defines the type and default is company_id"), current_user: UserModel = Depends(get_current_user)):
     """Get company from company id"""
     if type == "company_id":
         company = await get_company(company_primary_key)
