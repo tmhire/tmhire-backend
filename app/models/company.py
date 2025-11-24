@@ -58,6 +58,27 @@ class CompanyCreate(BaseModel):
         }
     )
 
+class CompanyUpdate(BaseModel):
+    company_code: str | None = None
+    company_name: str | None = None
+    company_status: Literal["pending", "approved", "revoked"] | None = None
+    city: str | None = None
+    preferred_format: Literal["12h", "24h"] = "24h"
+    custom_start_hour: float = 0.0
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "company_code": "MCF",
+                "company_name": "Main Concrete Firm",
+                "company_status": False,
+                "city": "Coimbatore",
+                "preferred_format": "24h",
+                "custom_start_hour": 0.0,
+            }
+        }
+    )
+
 
 class ChangeStatus(BaseModel):
     company_id: str
