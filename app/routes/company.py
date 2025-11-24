@@ -57,11 +57,11 @@ async def change_status(
     if current_user.role != "company_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail= "User not super admin",
+            detail= "User not company admin",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    users = await change_company_status(company_data)
+    users = await update_company(company_data)
     return StandardResponse(
         success=True,
         message="Company users retrieved successfully",

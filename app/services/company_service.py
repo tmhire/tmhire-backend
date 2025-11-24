@@ -2,7 +2,7 @@ from bson import ObjectId
 from datetime import datetime
 from typing import List, Optional
 from fastapi import HTTPException
-from app.models.company import ChangeStatus, CompanyCreate, CompanyModel
+from app.models.company import ChangeStatus, CompanyCreate, CompanyModel, CompanyUpdate
 from app.db.mongodb import companies, users
 from pymongo import ASCENDING
 
@@ -54,7 +54,7 @@ async def create_company(company_data: CompanyCreate) -> CompanyModel:
     new_company = await companies.find_one({"_id": result.inserted_id})
     return CompanyModel(**new_company)
 
-async def update_company(company_id: str, company: CompanyCreate):
+async def update_company(company_id: str, company: CompanyUpdate):
     """Update a company"""
     company_data = {k: v for k, v in company.model_dump().items() if v is not None}
 
