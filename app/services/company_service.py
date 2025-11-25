@@ -6,12 +6,22 @@ from app.models.company import ChangeStatus, CompanyCreate, CompanyModel, Compan
 from app.db.mongodb import companies, users
 from pymongo import ASCENDING
 
-from app.models.user import UserModel
+from app.models.user import UserModel, CompanyUserModel
 
 async def get_all_companies() -> List[CompanyModel]:
     """Get all companies"""
     company_list = []
     async for company in companies.find().sort("company_code", ASCENDING):
+        # Find the company admin for this company
+        company_admin = await users.find_one({
+            "company_id": ObjectId(company["_id"]),
+            "role": "company_admin"
+        })
+        
+        # Add contact from company admin if found
+        if company_admin and company_admin.get("contact"):
+            company["contact"] = company_admin["contact"]
+        
         company_list.append(CompanyModel(**company))
     return company_list
 
@@ -27,6 +37,37 @@ async def get_users_from_company(company_id: str) -> List[UserModel]:
     company_users = []
     async for user in users.find({"company_id": ObjectId(company_id)}).sort("name", ASCENDING):
         company_users.append(UserModel(**user))
+    return company_users
+
+
+async def get_all_users_with_company_info() -> List[CompanyUserModel]:
+    """Get all users across companies and include company_code/name/status"""
+    company_users: List[CompanyUserModel] = []
+    async for u in users.find().sort("name", ASCENDING):
+        user = dict(u)
+        cid = user.get("company_id")
+        comp = None
+        if cid:
+            # company_id in user doc may be an ObjectId or a string
+            try:
+                if isinstance(cid, ObjectId):
+                    comp = await companies.find_one({"_id": cid})
+                else:
+                    comp = await companies.find_one({"_id": ObjectId(cid)})
+            except Exception:
+                comp = None
+
+        if comp:
+            user["company_code"] = comp.get("company_code") or ""
+            user["company_name"] = comp.get("company_name") or ""
+            user["company_status"] = comp.get("company_status") or "pending"
+        else:
+            user["company_code"] = ""
+            user["company_name"] = ""
+            user["company_status"] = "pending"
+
+        company_users.append(CompanyUserModel(**user))
+
     return company_users
 
 async def get_company(id: str) -> Optional[CompanyModel]:

@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from app.models.company import ChangeStatus, CompanyModel, CompanyUpdate
-from app.models.user import UserModel
+from app.models.user import UserModel, CompanyUserModel
 from app.services.auth_service import get_current_user
 from typing import List, Literal
 from app.schemas.response import StandardResponse
-from app.services.company_service import change_company_status, get_all_companies, get_company_by_code, get_users_from_company, update_company, get_company
+from app.services.company_service import change_company_status, get_all_companies, get_company_by_code, get_users_from_company, update_company, get_company, get_all_users_with_company_info
 
 router = APIRouter(tags=["Company"])
 
@@ -38,10 +38,14 @@ async def get_company_by_company_id(company_primary_key: str, type: Literal["com
         data=company
     )
 
-@router.get("/all_users", response_model=StandardResponse[List[UserModel]])
+@router.get("/all_users", response_model=StandardResponse[List[CompanyUserModel]])
 async def get_users(current_user: UserModel = Depends(get_current_user)):
-    """Get all users from company"""
-    users = await get_users_from_company(current_user.company_id)
+    """Get all users from company. Super admin receives all users across companies with company_code."""
+    if current_user.role == "super_admin":
+        users = await get_all_users_with_company_info()
+    else:
+        users = await get_users_from_company(current_user.company_id)
+
     return StandardResponse(
         success=True,
         message="Company users retrieved successfully",

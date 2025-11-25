@@ -10,6 +10,7 @@ class CompanyModel(BaseModel):
     company_name: Optional[str] = Field(default=None, description="Company that the user works for")
     company_status: Literal["pending", "approved", "revoked"]
     city: Optional[str] = Field(default=None, description="Location of the user")
+    contact: Optional[int] = Field(default=None, description="Phone number of the company admin")
     preferred_format: Optional[Literal["12h", "24h"]] = "24h"
     custom_start_hour: Optional[float] = 0.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
