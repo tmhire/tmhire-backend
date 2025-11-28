@@ -279,7 +279,7 @@ async def generate_schedule_endpoint(
             schedule_id=schedule_id, 
             selected_tms=selected_tms, 
             pump_id=pump_id, 
-            user_id=current_user, 
+            current_user=current_user, 
             type=body.type, 
             partially_available_tm=body.partially_available_tm, 
             partially_available_pump=body.partially_available_pump
