@@ -6,6 +6,10 @@ from bson import ObjectId
 
 from app.models.company import CompanyModel
 
+class CompanyAdminInfo(BaseModel):
+    mail: str = ""
+    phone: str = ""
+
 class UserModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     email: EmailStr
@@ -101,3 +105,4 @@ class CompanyUserModel(UserModel):
     preferred_format: Optional[Literal["12h", "24h"]] = "24h"
     custom_start_hour: Optional[float] = 0.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    parent_admin: Optional[CompanyAdminInfo] = None

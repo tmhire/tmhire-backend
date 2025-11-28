@@ -1,7 +1,7 @@
 from bson import ObjectId
 from app.db.mongodb import users
 from app.models.company import CompanyCreate, CompanyModel
-from app.models.user import CompanyUserModel, UserModel, UserCreate, UserUpdate
+from app.models.user import CompanyAdminInfo, CompanyUserModel, UserModel, UserCreate, UserUpdate
 from datetime import datetime, timedelta
 from typing import Optional
 import os
@@ -93,9 +93,45 @@ async def onboard_user(company: CompanyCreate, current_user: UserModel):
             user_data["company_id"] = company[key]
             del company[key]
     user_data["role"] = role
-    user_data["contact"]= contact
+    if contact is not None:
+        try:
+            user_data["contact"] = int(contact)
+        except (TypeError, ValueError):
+            user_data["contact"] = contact
+    else:
+        user_data["contact"] = contact
 
     user = await update_user_data(current_user.id, UserUpdate(**user_data), current_user=current_user)
+
+    response_extras = {}
+
+    def build_company_admin(mail=None, phone=None):
+        if mail or phone:
+            return CompanyAdminInfo(
+                mail=mail or "",
+                phone=str(phone) if phone else ""
+            )
+        return None
+
+    if role == "company_admin":
+        response_extras["parent_admin"] = build_company_admin(
+            "vairamuthun1@gmail.com",
+            "+91 98198 88102"
+        )
+    elif role == "user":
+        company_admin = await users.find_one(
+            {"company_id": user_data["company_id"], "role": "company_admin"}
+        )
+        if company_admin:
+            company_admin_payload = build_company_admin(
+                company_admin.get("email"),
+                company_admin.get("contact")
+            )
+            if company_admin_payload:
+                response_extras["parent_admin"] = company_admin_payload
+
+    if response_extras.get("parent_admin"):
+        return {**user, **response_extras}
     return user
 
 async def update_user_data(user_id: str, user: UserUpdate, current_user: UserModel):
@@ -131,6 +167,7 @@ async def update_user_data(user_id: str, user: UserUpdate, current_user: UserMod
     latest_user = await get_user(user_id)
     company = await get_company(latest_user.company_id)
     company_data = company.model_dump()
+    company_data.pop("contact", None)
     for key in ["id", "_id"]:
         if company_data.get(key, None):
             company_data["company_id"] = company_data[key]
