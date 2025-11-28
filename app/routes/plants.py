@@ -13,7 +13,7 @@ router = APIRouter(tags=["Plants"])
 @router.get("/", response_model=StandardResponse[List[PlantModel]])
 async def read_plants(current_user: UserModel = Depends(get_current_user)):
     """Get all plants for the current user"""
-    plants = await get_all_plants(str(current_user.id))
+    plants = await get_all_plants(current_user)
     return StandardResponse(
         success=True,
         message="Plants retrieved successfully",
@@ -26,7 +26,7 @@ async def create_new_plant(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Create a new plant"""
-    new_plant = await create_plant(plant, str(current_user.id))
+    new_plant = await create_plant(plant, current_user)
     return StandardResponse(
         success=True,
         message="Plant created successfully",
@@ -39,7 +39,7 @@ async def read_plant(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Get a specific plant by ID"""
-    plant = await get_plant(plant_id, str(current_user.id))
+    plant = await get_plant(plant_id, current_user)
     if not plant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -58,7 +58,7 @@ async def update_plant_details(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Update a plant"""
-    updated_plant = await update_plant(plant_id, plant, str(current_user.id))
+    updated_plant = await update_plant(plant_id, plant, current_user)
     if not updated_plant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -76,7 +76,7 @@ async def delete_plant_record(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Delete a plant"""
-    result = await delete_plant(plant_id, str(current_user.id))
+    result = await delete_plant(plant_id, current_user)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -94,7 +94,7 @@ async def read_plant_transit_mixers(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Get all transit mixers for a specific plant"""
-    result = await get_plant_tms(plant_id, str(current_user.id))
+    result = await get_plant_tms(plant_id, current_user)
     if not result["plant"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -119,7 +119,7 @@ async def update_plant_status(
 
     Returns the updated plant details.
     """
-    plant = await get_plant(plant_id, str(current_user.id))
+    plant = await get_plant(plant_id, current_user)
     if not plant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -131,7 +131,7 @@ async def update_plant_status(
     else:
         new_status = "active"
     plant.status = new_status
-    updated_plant = await update_plant(plant_id, plant, str(current_user.id))
+    updated_plant = await update_plant(plant_id, plant, current_user)
     return StandardResponse(
         success=True,
         message="Transit mixer status updated successfully",

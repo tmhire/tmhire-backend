@@ -1,29 +1,52 @@
 from app.db.mongodb import transit_mixers, schedules
 from app.models.transit_mixer import TransitMixerModel, TransitMixerCreate, TransitMixerUpdate
+from app.models.user import UserModel
 from bson import ObjectId
 from typing import List, Optional, Dict, Any
 # from app.services.schedule_calendar_service import get_tm_availability
 from datetime import datetime, date, time, timedelta
 from pymongo import DESCENDING
+from fastapi import HTTPException
 
-async def get_all_tms(user_id: str) -> List[TransitMixerModel]:
-    """Get all transit mixers for a user"""
+async def get_all_tms(current_user: UserModel) -> List[TransitMixerModel]:
+    """Get all transit mixers for the current user's company"""
+    query = {}
+    
+    # Super admin can see all transit mixers
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     tms = []
-    async for tm in transit_mixers.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
+    async for tm in transit_mixers.find(query).sort("created_at", DESCENDING):
         tms.append(TransitMixerModel(**tm))
     return tms
 
-async def get_tm(id: str, user_id: str) -> Optional[TransitMixerModel]:
+async def get_tm(id: str, current_user: UserModel) -> Optional[TransitMixerModel]:
     """Get a specific transit mixer by ID"""
-    tm = await transit_mixers.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+    query = {"_id": ObjectId(id)}
+    
+    # Super admin can see all transit mixers
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return None
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    tm = await transit_mixers.find_one(query)
     if tm:
         return TransitMixerModel(**tm)
     return None
 
-async def create_tm(tm: TransitMixerCreate, user_id: str) -> TransitMixerModel:
+async def create_tm(tm: TransitMixerCreate, current_user: UserModel) -> TransitMixerModel:
     """Create a new transit mixer"""
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="User must belong to a company")
+    
     tm_data = tm.model_dump()
-    tm_data["user_id"] = ObjectId(user_id)
+    tm_data["company_id"] = ObjectId(current_user.company_id)
+    tm_data["created_by"] = ObjectId(current_user.id)
+    tm_data["user_id"] = ObjectId(current_user.id)  # Keep for compatibility
     tm_data["created_at"] = datetime.utcnow()
     tm_data["last_updated"] = datetime.utcnow()
     
@@ -36,33 +59,54 @@ async def create_tm(tm: TransitMixerCreate, user_id: str) -> TransitMixerModel:
     new_tm = await transit_mixers.find_one({"_id": result.inserted_id})
     return TransitMixerModel(**new_tm)
 
-async def update_tm(id: str, tm: TransitMixerUpdate, user_id: str) -> Optional[TransitMixerModel]:
+async def update_tm(id: str, tm: TransitMixerUpdate, current_user: UserModel) -> Optional[TransitMixerModel]:
     """Update a transit mixer"""
     tm_data = {k: v for k, v in tm.model_dump().items() if v is not None}
     
     if not tm_data:
-        return await get_tm(id, user_id)
+        return await get_tm(id, current_user)
     
     # Convert plant_id to ObjectId if it exists
     if "plant_id" in tm_data and tm_data["plant_id"]:
         tm_data["plant_id"] = ObjectId(tm_data["plant_id"])
     
-    await transit_mixers.update_one(
-        {"_id": ObjectId(id), "user_id": ObjectId(user_id)},
-        {"$set": tm_data}
-    )
+    query = {"_id": ObjectId(id)}
+    # Super admin can update any transit mixer
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            raise HTTPException(status_code=403, detail="User must belong to a company")
+        query["company_id"] = ObjectId(current_user.company_id)
     
-    return await get_tm(id, user_id)
+    await transit_mixers.update_one(query, {"$set": tm_data})
+    
+    return await get_tm(id, current_user)
 
-async def delete_tm(id: str, user_id: str) -> bool:
+async def delete_tm(id: str, current_user: UserModel) -> bool:
     """Delete a transit mixer"""
-    result = await transit_mixers.delete_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+    # Verify transit mixer exists and user has access
+    tm = await get_tm(id, current_user)
+    if not tm:
+        return False
+    
+    query = {"_id": ObjectId(id)}
+    if current_user.role != "super_admin":
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    result = await transit_mixers.delete_one(query)
     return result.deleted_count > 0
 
-async def get_average_capacity(user_id: str) -> float:
-    """Get the average capacity of all transit mixers for a user"""
+async def get_average_capacity(current_user: UserModel) -> float:
+    """Get the average capacity of all transit mixers for the current user's company"""
+    match_query = {}
+    
+    # Super admin can see all transit mixers
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return 0.0
+        match_query["company_id"] = ObjectId(current_user.company_id)
+    
     result = await transit_mixers.aggregate([
-        {"$match": {"user_id": ObjectId(user_id)}},
+        {"$match": match_query},
         {"$group": {"_id": None, "avg_capacity": {"$avg": "$capacity"}}}
     ]).to_list(1)
     
@@ -70,10 +114,18 @@ async def get_average_capacity(user_id: str) -> float:
         return result[0]["avg_capacity"]
     return 0.0
 
-async def get_tms_by_plant(plant_id: str, user_id: str) -> List[TransitMixerModel]:
+async def get_tms_by_plant(plant_id: str, current_user: UserModel) -> List[TransitMixerModel]:
     """Get all transit mixers for a specific plant"""
+    query = {"plant_id": ObjectId(plant_id)}
+    
+    # Filter by company_id if not super admin
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     tms = []
-    async for tm in transit_mixers.find({"plant_id": ObjectId(plant_id), "user_id": ObjectId(user_id)}):
+    async for tm in transit_mixers.find(query):
         tms.append(TransitMixerModel(**tm))
     return tms
 
@@ -119,13 +171,13 @@ async def get_tms_by_plant(plant_id: str, user_id: str) -> List[TransitMixerMode
     
 #     return available_tms
 
-async def get_tm_availability_slots(tm_id: str, date_val: date, user_id: str) -> Dict[str, Any]:
+async def get_tm_availability_slots(tm_id: str, date_val: date, current_user: UserModel) -> Dict[str, Any]:
     """
     Get availability for a specific TM on a specific date in 30-minute intervals.
     Returns an object with tm_id and availability array with slots for the entire day.
     """
-    # Get the TM details to verify it exists and belongs to the user
-    tm = await get_tm(tm_id, user_id)
+    # Get the TM details to verify it exists and belongs to the user's company
+    tm = await get_tm(tm_id, current_user)
     if not tm:
         return {"tm_id": tm_id, "availability": []}
     
@@ -152,8 +204,7 @@ async def get_tm_availability_slots(tm_id: str, date_val: date, user_id: str) ->
     day_end = datetime.combine(date_val, time(23, 59, 59))
     
     # Find all schedules with trips involving this TM on the given date
-    async for schedule in schedules.find({
-        "user_id": ObjectId(user_id),
+    schedule_query = {
         "$or": [
             {
                 "output_table": {
@@ -182,7 +233,15 @@ async def get_tm_availability_slots(tm_id: str, date_val: date, user_id: str) ->
                 }
             }
         ]
-    }):
+    }
+    
+    # Filter by company_id if not super admin
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return {"tm_id": tm.identifier, "availability": availability}
+        schedule_query["company_id"] = ObjectId(current_user.company_id)
+    
+    async for schedule in schedules.find(schedule_query):
         # Check if this schedule uses burst model
         is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
         

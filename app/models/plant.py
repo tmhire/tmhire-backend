@@ -6,7 +6,9 @@ from bson import ObjectId
 
 class PlantModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
+    user_id: PyObjectId  # Keep for backward compatibility
+    company_id: Optional[PyObjectId] = None  # Company that owns this plant
+    created_by: Optional[PyObjectId] = None  # User who created this plant
     name: str
     capacity: Optional[float] = None
     location: str

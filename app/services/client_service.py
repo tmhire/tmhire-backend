@@ -1,30 +1,53 @@
 from app.db.mongodb import clients, projects, schedules
 from app.models.client import ClientModel, ClientCreate, ClientUpdate
+from app.models.user import UserModel
 from bson import ObjectId
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pymongo import DESCENDING
+from fastapi import HTTPException
 
-async def get_all_clients(user_id: str) -> List[ClientModel]:
-    """Get all clients for a user"""
+async def get_all_clients(current_user: UserModel) -> List[ClientModel]:
+    """Get all clients for the current user's company"""
+    query = {}
+    
+    # Super admin can see all clients
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     client_list = []
-    async for client in clients.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
+    async for client in clients.find(query).sort("created_at", DESCENDING):
         client_list.append(ClientModel(**client))
     return client_list
 
-async def get_client(id: str, user_id: str) -> Optional[ClientModel]:
+async def get_client(id: str, current_user: UserModel) -> Optional[ClientModel]:
     """Get a specific client by ID"""
     if id is None:
         return None
-    client = await clients.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+    
+    query = {"_id": ObjectId(id)}
+    # Super admin can see all clients
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return None
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    client = await clients.find_one(query)
     if client:
         return ClientModel(**client)
     return None
 
-async def create_client(client: ClientCreate, user_id: str) -> ClientModel:
+async def create_client(client: ClientCreate, current_user: UserModel) -> ClientModel:
     """Create a new client"""
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="User must belong to a company")
+    
     client_data = client.model_dump()
-    client_data["user_id"] = ObjectId(user_id)
+    client_data["company_id"] = ObjectId(current_user.company_id)
+    client_data["created_by"] = ObjectId(current_user.id)
+    client_data["user_id"] = ObjectId(current_user.id)  # Keep for compatibility
     client_data["created_at"] = datetime.utcnow()
     client_data["last_updated"] = datetime.utcnow()
     
@@ -33,29 +56,42 @@ async def create_client(client: ClientCreate, user_id: str) -> ClientModel:
     new_client = await clients.find_one({"_id": result.inserted_id})
     return ClientModel(**new_client)
 
-async def update_client(id: str, client: ClientUpdate, user_id: str) -> Optional[ClientModel]:
+async def update_client(id: str, client: ClientUpdate, current_user: UserModel) -> Optional[ClientModel]:
     """Update a client"""
     client_data = {k: v for k, v in client.model_dump().items() if v is not None}
     
     if not client_data:
-        return await get_client(id, user_id)
+        return await get_client(id, current_user)
     
     client_data["last_updated"] = datetime.utcnow()
     
-    await clients.update_one(
-        {"_id": ObjectId(id), "user_id": ObjectId(user_id)},
-        {"$set": client_data}
-    )
+    query = {"_id": ObjectId(id)}
+    # Super admin can update any client
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            raise HTTPException(status_code=403, detail="User must belong to a company")
+        query["company_id"] = ObjectId(current_user.company_id)
     
-    return await get_client(id, user_id)
+    await clients.update_one(query, {"$set": client_data})
+    
+    return await get_client(id, current_user)
 
-async def delete_client(id: str, user_id: str) -> Dict[str, bool]:
+async def delete_client(id: str, current_user: UserModel) -> Dict[str, bool]:
     """Delete a client and check for dependencies"""
+    # Verify client exists and user has access
+    client = await get_client(id, current_user)
+    if not client:
+        return {
+            "success": False,
+            "message": "Client not found"
+        }
+    
     # Check if this client has any associated schedules
-    has_schedules = await schedules.find_one({
-        "user_id": ObjectId(user_id),
-        "client_id": ObjectId(id)
-    })
+    schedule_query = {"client_id": ObjectId(id)}
+    if current_user.role != "super_admin":
+        schedule_query["company_id"] = ObjectId(current_user.company_id)
+    
+    has_schedules = await schedules.find_one(schedule_query)
     
     if has_schedules:
         return {
@@ -64,25 +100,37 @@ async def delete_client(id: str, user_id: str) -> Dict[str, bool]:
         }
     
     # Delete the client if no dependencies
-    result = await clients.delete_one({
-        "_id": ObjectId(id),
-        "user_id": ObjectId(user_id)
-    })
+    query = {"_id": ObjectId(id)}
+    if current_user.role != "super_admin":
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    result = await clients.delete_one(query)
     
     return {
         "success": result.deleted_count > 0,
         "message": "Client deleted successfully" if result.deleted_count > 0 else "Client not found"
     }
 
-async def get_client_schedules(id: str, user_id: str) -> Dict:
+async def get_client_schedules(id: str, current_user: UserModel) -> Dict:
     """Get all schedules for a specific client"""
-    client = await get_client(id, user_id)
+    client = await get_client(id, current_user)
     if not client:
         return {"client": None, "schedules": []}
     
+    project_query = {"client_id": ObjectId(id)}
+    schedule_query_base = {}
+    
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return {"client": client.model_dump(by_alias=True), "schedules": []}
+        company_id_obj = ObjectId(current_user.company_id)
+        project_query["company_id"] = company_id_obj
+        schedule_query_base["company_id"] = company_id_obj
+    
     schedule_list = []
-    async for project in projects.find({"client_id": ObjectId(id), "user_id": ObjectId(user_id)}):
-        async for schedule in schedules.find({"project_id": ObjectId(project["_id"]), "user_id": ObjectId(user_id)}):
+    async for project in projects.find(project_query):
+        schedule_query = {"project_id": ObjectId(project["_id"]), **schedule_query_base}
+        async for schedule in schedules.find(schedule_query):
             schedule_list.append(schedule)
     
     return {
@@ -90,9 +138,9 @@ async def get_client_schedules(id: str, user_id: str) -> Dict:
         "schedules": schedule_list
     }
 
-async def get_client_stats(id: str, user_id: str) -> Dict[str, Any]:
+async def get_client_stats(id: str, current_user: UserModel) -> Dict[str, Any]:
     """Get statistics for a specific client including volume metrics and trip summaries"""
-    client_schedule_list = await get_client_schedules(id, user_id)
+    client_schedule_list = await get_client_schedules(id, current_user)
     client = client_schedule_list["client"]
     all_schedules = client_schedule_list["schedules"]
     if not client:
@@ -138,7 +186,7 @@ async def get_client_stats(id: str, user_id: str) -> Dict[str, Any]:
             
             # Add to trip list if we have enough information
             if trip_date and trip_tm and trip_volume > 0:
-                tm = await get_tm_identifier(trip_tm, user_id)
+                tm = await get_tm_identifier(trip_tm, current_user)
                 schedule_trips.append({
                     "date": trip_date.strftime("%Y-%m-%d"),
                     "tm": tm,
@@ -173,12 +221,13 @@ async def get_client_stats(id: str, user_id: str) -> Dict[str, Any]:
         "trips": trips
     }
 
-async def get_tm_identifier(tm_id: str, user_id: str) -> str:
+async def get_tm_identifier(tm_id: str, current_user: UserModel) -> str:
     """Helper function to get the TM identifier (registration number) from its ID"""
     from app.db.mongodb import transit_mixers
+    from app.services.tm_service import get_tm
     
     # Try to get the TM identifier from the database
-    tm = await transit_mixers.find_one({"_id": ObjectId(tm_id), "user_id": ObjectId(user_id)})
+    tm = await get_tm(tm_id, current_user)
     if tm:
-        return tm.get("identifier", tm_id)
+        return tm.identifier
     return tm_id 

@@ -19,7 +19,7 @@ async def read_projects(current_user: UserModel = Depends(get_current_user)):
     
     Returns a list of all projects belonging to the authenticated user.
     """
-    projects = await get_all_projects(str(current_user.id))
+    projects = await get_all_projects(current_user)
     return StandardResponse(
         success=True,
         message="Projects retrieved successfully",
@@ -37,7 +37,7 @@ async def create_new_project(
     Requires project details in the request body.
     Returns the newly created project with its ID.
     """
-    new_project = await create_project(project, str(current_user.id))
+    new_project = await create_project(project, current_user)
     return StandardResponse(
         success=True,
         message="Project created successfully",
@@ -57,7 +57,7 @@ async def read_project(
     
     Returns the project details if found.
     """
-    project = await get_project(project_id, str(current_user.id))
+    project = await get_project(project_id, current_user)
     if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -86,7 +86,7 @@ async def update_project_details(
     
     Returns the updated project details.
     """
-    updated_project = await update_project(project_id, project, str(current_user.id))
+    updated_project = await update_project(project_id, project, current_user)
     if not updated_project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -111,7 +111,7 @@ async def delete_project_record(
     
     Returns a success status and message. Will not delete projects that have associated schedules.
     """
-    result = await delete_project(project_id, str(current_user.id))
+    result = await delete_project(project_id, current_user)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -136,7 +136,7 @@ async def read_project_schedules(
     
     Returns the project details along with all their associated schedules.
     """
-    result = await get_project_schedules(project_id, str(current_user.id))
+    result = await get_project_schedules(project_id, current_user)
     if not result["project"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -165,7 +165,7 @@ async def read_project_stats(
     - Pending delivery volume
     - Recent trip summaries
     """    
-    stats = await get_project_stats(project_id, str(current_user.id))
+    stats = await get_project_stats(project_id, current_user)
     return StandardResponse(
         success=True,
         message="Project statistics retrieved successfully",
@@ -185,7 +185,7 @@ async def read_projects_by_mother_plant(
     
     Returns a list of all projects associated with the specified mother plant.
     """
-    projects = await get_all_projects_for_mother_plant(str(current_user.id), mother_plant_id)
+    projects = await get_all_projects_for_mother_plant(current_user, mother_plant_id)
     return StandardResponse(
         success=True,
         message="Projects for mother plant retrieved successfully",
@@ -201,7 +201,7 @@ async def read_projects_without_mother_plant(
     
     Returns a list of all projects without a mother plant.
     """
-    projects = await get_projects_without_mother_plant(str(current_user.id))
+    projects = await get_projects_without_mother_plant(current_user)
     return StandardResponse(
         success=True,
         message="Projects without mother plant retrieved successfully",
@@ -221,7 +221,7 @@ async def migrate_projects_to_mother_plant(
     
     Returns migration results.
     """
-    result = await migrate_projects_with_mother_plant(str(current_user.id), mother_plant_id)
+    result = await migrate_projects_with_mother_plant(current_user, mother_plant_id)
     return StandardResponse(
         success=True,
         message=result["message"],

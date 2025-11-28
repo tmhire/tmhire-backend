@@ -6,7 +6,9 @@ from bson import ObjectId
 
 class TeamMemberModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
+    user_id: PyObjectId  # Keep for backward compatibility
+    company_id: Optional[PyObjectId] = None  # Company that owns this team member
+    created_by: Optional[PyObjectId] = None  # User who created this team member
     name: str
     designation: Literal["sales-engineer", "pump-operator", "pipeline-gang", "site-supervisor"]
     contact: int

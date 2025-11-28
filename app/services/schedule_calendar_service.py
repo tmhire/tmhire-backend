@@ -1,12 +1,14 @@
 from app.db.mongodb import schedule_calendar, transit_mixers, plants, schedules, pumps, projects
 from app.models.schedule_calendar import DailySchedule, GanttPump, GanttResponse, TimeSlot, TMAvailabilitySlot, ScheduleCalendarQuery, GanttMixer, GanttTask, PlantGanttResponse, PlantGanttRow, PlantTask, PlantHourlyUtilization
 from app.models.schedule import ScheduleModel
+from app.models.user import UserModel
 from datetime import datetime, date, time, timedelta, timezone
 from bson import ObjectId
 from typing import List, Dict, Optional, Any
 import asyncio
 import math
 from app.services.tm_service import get_average_capacity
+from fastapi import HTTPException
 
 # Constants for calendar setup
 CALENDAR_START_HOUR = 8  # 8AM
@@ -28,7 +30,7 @@ def _get_valid_date(date: date) -> date:
 
 async def get_calendar_for_date_range(
     query: ScheduleCalendarQuery, 
-    user_id: str
+    current_user: UserModel
 ) -> List[DailySchedule]:
     """Get calendar data for a date range with 30-minute time slots from 8AM to 8PM"""
     calendar_data = []
@@ -41,16 +43,21 @@ async def get_calendar_for_date_range(
     start_datetime = datetime.combine(start_date, time.min)
     end_datetime = datetime.combine(end_date, time.max)
     
-    print(f"Fetching calendar for date range: {start_datetime} to {end_datetime}, user_id: {user_id}")
+    print(f"Fetching calendar for date range: {start_datetime} to {end_datetime}")
     
     # Find all calendar entries in the given date range
     query_filter = {
-        "user_id": ObjectId(user_id),
         "date": {
             "$gte": start_datetime,
             "$lte": end_datetime
         }
     }
+    
+    # Filter by company_id if not super admin
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query_filter["company_id"] = ObjectId(current_user.company_id)
     
     # Add plant or TM filter if provided
     if query.plant_id:
@@ -79,7 +86,7 @@ async def get_calendar_for_date_range(
         if current_date not in existing_dates:
             print(f"Date {current_date} not found in calendar, initializing...")
             # Initialize new calendar day with TMs
-            new_day = await initialize_calendar_day(current_date, user_id)
+            new_day = await initialize_calendar_day(current_date, current_user)
             if new_day:
                 print(f"Successfully initialized calendar for date {current_date}")
                 calendar_data.append(new_day)
@@ -98,9 +105,12 @@ async def get_calendar_for_date_range(
 
 async def initialize_calendar_day(
     day_date: date, 
-    user_id: str
+    current_user: UserModel
 ) -> Optional[DailySchedule]:
     """Initialize calendar data for a specific date with 30-minute time slots from 8AM to 8PM"""
+    if not current_user.company_id:
+        return None
+    
     # Ensure day_date is a date object
     if isinstance(day_date, str):
         try:
@@ -119,16 +129,25 @@ async def initialize_calendar_day(
     elif isinstance(day_date, datetime):
         day_date = day_date.date()
     
-    print(f"Initializing calendar day for date: {day_date}, user_id: {user_id}")
+    print(f"Initializing calendar day for date: {day_date}")
     
-    # Get all TMs for this user
+    # Get all TMs for this company
     tm_list = []
     
     # Get TMs and their corresponding plants
+    plant_query = {}
+    tm_query_base = {}
+    
+    if current_user.role != "super_admin":
+        company_id_obj = ObjectId(current_user.company_id)
+        plant_query["company_id"] = company_id_obj
+        tm_query_base["company_id"] = company_id_obj
+    
     tm_plants = {}
-    async for plant in plants.find({"user_id": ObjectId(user_id)}):
+    async for plant in plants.find(plant_query):
         plant_id = str(plant["_id"])
-        async for tm in transit_mixers.find({"user_id": ObjectId(user_id), "plant_id": plant["_id"]}):
+        tm_query = {"plant_id": plant["_id"], **tm_query_base}
+        async for tm in transit_mixers.find(tm_query):
             tm_plants[str(tm["_id"])] = {
                 "tm_id": str(tm["_id"]),
                 "tm_identifier": tm["identifier"],
@@ -137,7 +156,8 @@ async def initialize_calendar_day(
             }
             
     # Also get TMs with no plant assigned
-    async for tm in transit_mixers.find({"user_id": ObjectId(user_id), "plant_id": None}):
+    tm_query_no_plant = {"plant_id": None, **tm_query_base}
+    async for tm in transit_mixers.find(tm_query_no_plant):
         tm_plants[str(tm["_id"])] = {
             "tm_id": str(tm["_id"]),
             "tm_identifier": tm["identifier"],
@@ -146,7 +166,7 @@ async def initialize_calendar_day(
         }
     
     if not tm_plants:
-        print(f"No transit mixers found for user {user_id}")
+        print(f"No transit mixers found for company")
         return None
         
     # Use datetime object for MongoDB compatibility
@@ -154,7 +174,9 @@ async def initialize_calendar_day(
     
     # Create a new calendar day with time slots from 8AM to 8PM
     calendar_day = {
-        "user_id": ObjectId(user_id),
+        "company_id": ObjectId(current_user.company_id),
+        "created_by": ObjectId(current_user.id),
+        "user_id": ObjectId(current_user.id),  # Keep for compatibility
         "date": day_datetime,
         "time_slots": [],
         "created_at": datetime.utcnow(),
@@ -195,7 +217,6 @@ async def initialize_calendar_day(
     
     # Get all schedules for this day
     schedule_query = {
-        "user_id": ObjectId(user_id),
         "$or": [
             # Match strings in ISO format
             {"output_table.plant_start": {"$regex": f"{day_date.isoformat()}"}},
@@ -205,6 +226,10 @@ async def initialize_calendar_day(
             {"output_table.return": {"$gte": day_datetime_start, "$lte": day_datetime_end}}
         ]
     }
+    
+    # Filter by company_id
+    if current_user.role != "super_admin":
+        schedule_query["company_id"] = ObjectId(current_user.company_id)
     
     print(f"Schedule query: {schedule_query}")
     
@@ -314,7 +339,7 @@ def _ensure_dateobj(date: datetime | str) -> date:
 async def get_tm_availability(
     date_val: date,
     tm_id: str,
-    user_id: str
+    current_user: UserModel
 ) -> List[Dict[str, Any]]:
     """
     Get availability slots for a specific TM on a specific date.
@@ -335,8 +360,7 @@ async def get_tm_availability(
     
     try:
         # Query schedules collection directly
-        async for schedule in schedules.find({
-            "user_id": ObjectId(user_id),
+        schedule_query = {
             "output_table": {
                 "$elemMatch": {
                     "tm_id": tm_id,
@@ -348,7 +372,15 @@ async def get_tm_availability(
                     ]
                 }
             }
-        }):
+        }
+        
+        # Filter by company_id if not super admin
+        if current_user.role != "super_admin":
+            if not current_user.company_id:
+                return availability_slots
+            schedule_query["company_id"] = ObjectId(current_user.company_id)
+        
+        async for schedule in schedules.find(schedule_query):
             # For each trip in this schedule involving this TM
             for trip in schedule.get("output_table", []):
                 if trip.get("tm_id") != tm_id:
@@ -649,7 +681,7 @@ def _is_between(v1, v2, v3):
 
 async def get_gantt_data(
     query_date_str: str,
-    user_id: str
+    current_user: UserModel
 ) -> GanttResponse:
     """Get calendar data in Gantt chart format with multiple segments per trip"""
     query_date = datetime.fromisoformat(query_date_str).replace(tzinfo=timezone.utc)
@@ -661,7 +693,6 @@ async def get_gantt_data(
 
     # Find all schedules in the date range
     schedule_query = {
-        "user_id": ObjectId(user_id),
         "status": "generated",  # Only get generated schedules
         "$or": [
             {
@@ -691,12 +722,28 @@ async def get_gantt_data(
         ]
     }
 
+    # Build queries for company filtering
+    tm_query = {}
+    pump_query = {}
+    plant_query = {}
+    project_query = {}
+    
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return GanttResponse(mixers=[])
+        company_id_obj = ObjectId(current_user.company_id)
+        tm_query["company_id"] = company_id_obj
+        pump_query["company_id"] = company_id_obj
+        plant_query["company_id"] = company_id_obj
+        project_query["company_id"] = company_id_obj
+        schedule_query["company_id"] = company_id_obj
+    
     all_tms, all_pumps, queried_schedules, all_plants, all_projects = await asyncio.gather(
-        transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
-        pumps.find({"user_id": ObjectId(user_id)}).to_list(length=None), 
+        transit_mixers.find(tm_query).to_list(length=None), 
+        pumps.find(pump_query).to_list(length=None), 
         schedules.find(schedule_query).to_list(length=None),
-        plants.find({"user_id": ObjectId(user_id)}).to_list(length=None),
-        projects.find({"user_id": ObjectId(user_id)}).to_list(length=None)
+        plants.find(plant_query).to_list(length=None),
+        projects.find(project_query).to_list(length=None)
     )
 
     plant_map = {str(plant["_id"]): plant for plant in all_plants}
@@ -742,7 +789,8 @@ async def get_gantt_data(
         
         schedule_no = schedule.get("schedule_no", "Schedule Number not set")
         client_name = schedule.get("client_name")
-        project_name = project_map[str(schedule.get("project_id"))].get("name", "Unknown Project")
+        project_id = str(schedule.get("project_id", ""))
+        project_name = project_map.get(project_id, {}).get("name", "Unknown Project") if project_id else "Unknown Project"
         schedule_id = str(schedule["_id"])
 
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0)
@@ -960,30 +1008,46 @@ def get_date_from_iso(iso_str):
 
 async def get_plant_gantt_data(
     query_date_str: str,
-    user_id: str
+    current_user: UserModel
 ) -> PlantGanttResponse:
     """Aggregate plant-based tasks and hourly TM utilization for the given day."""
+    if not current_user.company_id:
+        return PlantGanttResponse(plants=[])
+    
     # Determine the day window from the provided query start (can encode custom start hour)
     query_start = datetime.fromisoformat(query_date_str).replace(tzinfo=timezone.utc)
     day_start = query_start
     day_end = query_start + timedelta(days=1)
 
-    # Load reference data
-    all_tms, all_plants, queried_schedules, all_projects, avg_tm_capacity = await asyncio.gather(
-        transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None),
-        plants.find({"user_id": ObjectId(user_id)}).to_list(length=None),
-        schedules.find({
-            "user_id": ObjectId(user_id),
-            "status": "generated",
+    # Build queries for company filtering
+    tm_query = {}
+    plant_query = {}
+    schedule_query_base = {
+        "status": "generated",
             "$or": [
                 {"output_table.plant_start": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}},
                 {"output_table.return": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}},
                 {"burst_table.plant_start": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}},
                 {"burst_table.return": {"$gte": day_start.isoformat(), "$lt": day_end.isoformat()}}
             ]
-        }).to_list(length=None),
-        projects.find({"user_id": ObjectId(user_id)}).to_list(length=None),
-        get_average_capacity(user_id)
+        }
+    
+    project_query = {}
+    
+    if current_user.role != "super_admin":
+        company_id_obj = ObjectId(current_user.company_id)
+        tm_query["company_id"] = company_id_obj
+        plant_query["company_id"] = company_id_obj
+        schedule_query_base["company_id"] = company_id_obj
+        project_query["company_id"] = company_id_obj
+
+    # Load reference data
+    all_tms, all_plants, queried_schedules, all_projects, avg_tm_capacity = await asyncio.gather(
+        transit_mixers.find(tm_query).to_list(length=None),
+        plants.find(plant_query).to_list(length=None),
+        schedules.find(schedule_query_base).to_list(length=None),
+        projects.find(project_query).to_list(length=None),
+        get_average_capacity(current_user)
     )
 
     # Build maps

@@ -21,7 +21,7 @@ async def get_dashboard(
     - monthly_stats: 12-month historical data for pumping quantity and TMs used
     - recent_orders: List of recent orders with client, quantity, and status
     """
-    dashboard_data = await get_dashboard_stats(date_val, str(current_user.id))
+    dashboard_data = await get_dashboard_stats(date_val, current_user)
     return StandardResponse(
         success=True,
         message="Dashboard statistics retrieved successfully",

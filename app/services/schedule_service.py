@@ -4,6 +4,7 @@ from app.db.mongodb import schedules, transit_mixers, pumps as pumps_db
 from app.models.pump import PumpModel
 from app.models.schedule import BurstTrip, Cancelation, DeleteType, GetScheduleResponse, InputParams, ScheduleModel, CalculateTM, ScheduleType, ScheduleUpdate, Trip, AvailabilityBody
 from app.models.transit_mixer import TransitMixerModel
+from app.models.user import UserModel
 from app.services.plant_service import get_all_plants, get_plant
 from app.services.project_service import get_all_projects, get_project
 from app.services.pump_service import get_all_pumps
@@ -14,6 +15,7 @@ from datetime import datetime, timedelta, date, time
 from bson import ObjectId
 from typing import List, Optional, Dict, Any, Tuple
 from app.schemas.utils import safe_serialize
+from fastapi import HTTPException
 import math
 
 # Unloading time lookup table
@@ -27,9 +29,16 @@ UNLOADING_TIME_LOOKUP = {
     12: 20
 }
 
-async def get_all_schedules(user_id: str, type: ScheduleType, from_date: date | str = datetime.now().date(), to_date: date | str = datetime.now().date(), isFromReports = False) -> List[ScheduleModel]:
+async def get_all_schedules(current_user: UserModel, type: ScheduleType, from_date: date | str = datetime.now().date(), to_date: date | str = datetime.now().date(), isFromReports = False) -> List[ScheduleModel]:
     schedule_list = []
-    query = {"user_id": ObjectId(user_id)}
+    query = {}
+    
+    # Super admin can see all schedules
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     if type != ScheduleType.all:
         query["type"] = type.value
 
@@ -72,8 +81,8 @@ async def get_all_schedules(user_id: str, type: ScheduleType, from_date: date | 
         ]
 
     all_plants, all_projects, all_schedules = await asyncio.gather(
-        get_all_plants(user_id),
-        get_all_projects(user_id),
+        get_all_plants(current_user),
+        get_all_projects(current_user),
         schedules.find(query).sort("created_at", DESCENDING).to_list(length=None)
     )
 
@@ -137,8 +146,16 @@ def _convert_to_datetime(date_str: str | datetime) -> datetime:
             date_str = None
     return date_str
 
-async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
-    schedule = await schedules.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+async def get_schedule(id: str, current_user: UserModel) -> Optional[GetScheduleResponse]:
+    query = {"_id": ObjectId(id)}
+    
+    # Super admin can see all schedules
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return None
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    schedule = await schedules.find_one(query)
     if schedule:
         # Get the tm_identifiers map for any TMs in the output_table
         tm_ids = []
@@ -151,8 +168,9 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         if tm_ids:
             tm_map = {}
             async for tm in transit_mixers.find({"_id": {"$in": tm_ids}}):
-                plant = (await get_plant(tm["plant_id"], user_id)).model_dump()
-                tm_map[str(tm["_id"])] = {"identifier": tm["identifier"], "plant_name": plant["name"]}
+                plant = (await get_plant(tm["plant_id"], current_user))
+                plant_name = plant.name if plant else "Unknown Plant"
+                tm_map[str(tm["_id"])] = {"identifier": tm["identifier"], "plant_name": plant_name}
 
             # Replace the TM IDs with their identifiers in the output_table
             for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
@@ -163,17 +181,18 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
                     trip["tm_status"] = tm_map[tm_id]["status"] if "status" in tm_map[tm_id] else "active"
 
         # Add project name and mother plant name to the schedule's response
-        project = await get_project(schedule.get("project_id", None), user_id)
+        project = await get_project(schedule.get("project_id", None), current_user)
         if project:
-            schedule["project_name"] = project.model_dump().get("name", "Unknown Project")
-            mother_plant_id = project.model_dump().get("mother_plant_id", None)
-            mother_plant = (await get_plant(mother_plant_id, user_id))
-            if mother_plant:
-                schedule["mother_plant_name"] = mother_plant.model_dump().get("name", "Unknown Plant")
+            schedule["project_name"] = project.name
+            mother_plant_id = project.mother_plant_id
+            if mother_plant_id:
+                mother_plant = await get_plant(str(mother_plant_id), current_user)
+                if mother_plant:
+                    schedule["mother_plant_name"] = mother_plant.name
 
 
         # Add site supervisor name to the schedule's response
-        supervisor = await get_team_member(schedule.get("site_supervisor_id", None), user_id)
+        supervisor = await get_team_member(schedule.get("site_supervisor_id", None), current_user)
         if supervisor:
             schedule["site_supervisor_name"] = supervisor.model_dump().get("name", "Unknown Supervisor")
 
@@ -240,12 +259,12 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
             trip["trip_no_for_tm"] = tm_trip[tm_id]["trip_count"]
 
         input_params = InputParams(**schedule["input_params"])
-        tm_suggestion = await calculate_tm_suggestions(user_id=user_id, input_params=input_params, tm_overrule=schedule.get("tm_overrule", None))
+        tm_suggestion = await calculate_tm_suggestions(current_user=current_user, input_params=input_params, tm_overrule=schedule.get("tm_overrule", None))
         if schedule.get("tm_overrule", None):
             schedule["tm_overrule"] = tm_suggestion["tm_overrule"]
         del tm_suggestion["tm_overrule"]
         tm_suggestion.pop("tm_count", None)
-        available_tms, available_pumps = await get_available_tms_pumps(user_id, schedule["input_params"]["pump_start"])
+        available_tms, available_pumps = await get_available_tms_pumps(current_user, schedule["input_params"]["pump_start"])
         pump_type = schedule.get("pump_type")
         for index, pump in enumerate(available_pumps):
             if pump.get("type") != pump_type:
@@ -254,23 +273,23 @@ async def get_schedule(id: str, user_id: str) -> Optional[GetScheduleResponse]:
         return GetScheduleResponse(**schedule, **tm_suggestion, available_tms=available_tms, available_pumps=available_pumps)
     return None
 
-async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Optional[GetScheduleResponse]:
+async def update_schedule(id: str, schedule: ScheduleUpdate, current_user: UserModel) -> Optional[GetScheduleResponse]:
     schedule_data = {k: v for k, v in schedule.model_dump().items() if v is not None}
 
     if not schedule_data:
-        return await get_schedule(id, user_id)
+        return await get_schedule(id, current_user)
 
     # Always require project_id and update client_id accordingly
     if "project_id" in schedule_data:
         from app.services.project_service import get_project
-        project = await get_project(schedule_data["project_id"], user_id)
+        project = await get_project(schedule_data["project_id"], current_user)
         if not project:
             raise ValueError("Project not found or does not belong to user.")
         client_id = getattr(project, "client_id", None)
         if not client_id:
             raise ValueError("Project does not have a client_id.")
         from app.services.client_service import get_client
-        client = await get_client(str(client_id), user_id)
+        client = await get_client(str(client_id), current_user)
         if not client:
             raise ValueError("Client not found for the given project.")
         schedule_data["project_id"] = ObjectId(schedule_data["project_id"])
@@ -302,12 +321,16 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
                     schedule_date = datetime.now().date()
             schedule_data["input_params"]["schedule_date"] = schedule_date.isoformat()
 
-    await schedules.update_one(
-        {"_id": ObjectId(id), "user_id": ObjectId(user_id)},
-        {"$set": schedule_data}
-    )
+    query = {"_id": ObjectId(id)}
+    # Super admin can update any schedule
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            raise HTTPException(status_code=403, detail="User must belong to a company")
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    await schedules.update_one(query, {"$set": schedule_data})
 
-    updated_schedule = await get_schedule(id, user_id)
+    updated_schedule = await get_schedule(id, current_user)
     
     # # Update calendar if schedule has changes
     # if updated_schedule and updated_schedule.output_table:
@@ -315,17 +338,20 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, user_id: str) -> Op
         
     return updated_schedule
 
-async def delete_schedule(id: str, delete_type: DeleteType, cancelation: Cancelation,user_id: str) -> Dict[str, str | bool]:
+async def delete_schedule(id: str, delete_type: DeleteType, cancelation: Cancelation, current_user: UserModel) -> Dict[str, str | bool]:
+    query = {"_id": ObjectId(id)}
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            raise HTTPException(status_code=403, detail="User must belong to a company")
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     if delete_type == DeleteType.cancel:
-        schedule = await schedules.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+        schedule = await schedules.find_one(query)
         if not schedule:
             return {"canceled": False, "schedule_id": id}
         if schedule.get("status", "") == "deleted":
             return {"canceled": False, "schedule_id": id}
-        result = await schedules.update_one({
-            "_id": ObjectId(id),
-            "user_id": ObjectId(user_id)
-        }, {
+        result = await schedules.update_one(query, {
             "$set": {
                 "status": "canceled",
                 "cancelation": cancelation,
@@ -338,15 +364,12 @@ async def delete_schedule(id: str, delete_type: DeleteType, cancelation: Cancela
         }
 
     elif delete_type == DeleteType.temporary:
-        schedule = await schedules.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+        schedule = await schedules.find_one(query)
         if not schedule:
             return {"deleted": False, "schedule_id": id}
         if schedule.get("status", "") == "deleted":
             return {"deleted": False, "schedule_id": id}
-        result = await schedules.update_one({
-            "_id": ObjectId(id),
-            "user_id": ObjectId(user_id)
-        }, {
+        result = await schedules.update_one(query, {
             "$set": {
                 "status": "deleted",
                 "last_updated": datetime.utcnow()
@@ -358,10 +381,7 @@ async def delete_schedule(id: str, delete_type: DeleteType, cancelation: Cancela
         }
 
     else:
-        result = await schedules.delete_one({
-            "_id": ObjectId(id),
-            "user_id": ObjectId(user_id)
-        })
+        result = await schedules.delete_one(query)
         return {
             "deleted": result.deleted_count > 0,
             "schedule_id": id
@@ -375,8 +395,8 @@ def get_unloading_time(capacity: float) -> int:
         rounded_capacity = 10
     return UNLOADING_TIME_LOOKUP[rounded_capacity]
 
-async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_overrule: int = None) -> Dict:
-    avg_capacity = await get_average_capacity(user_id)
+async def calculate_tm_suggestions(current_user: UserModel, input_params: InputParams, tm_overrule: int = None) -> Dict:
+    avg_capacity = await get_average_capacity(current_user)
     if avg_capacity == 0:
         raise ValueError("Cannot calculate TM count, average capacity is 0. Add TMs first.")
     
@@ -413,20 +433,27 @@ async def calculate_tm_suggestions(user_id: str, input_params: InputParams, tm_o
         "tm_overrule": tm_overrule if tm_overrule is not None else tm_count
     }
 
-async def _get_tm_ids_and_pump_ids_by_schedule_date(target_datetime: date, user_id: str) -> Tuple[Dict[str, Any]]:
+async def _get_tm_ids_and_pump_ids_by_schedule_date(target_datetime: date, current_user: UserModel) -> Tuple[Dict[str, Any]]:
     target_datetime = _convert_to_datetime(target_datetime)
     if target_datetime is None:
         return {}, {}
     previous_day, successive_day = target_datetime - timedelta(days=1), target_datetime + timedelta(days=1)
     tm_ids, pump_ids = {}, {}
-    async for schedule in schedules.find({
+    
+    query = {
         "input_params.schedule_date": {
             "$gte": previous_day.isoformat(),
             "$lte": successive_day.isoformat()
         },
-        "status": "generated",
-        "user_id": ObjectId(user_id)
-    }):
+        "status": "generated"
+    }
+    
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return {}, {}
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    async for schedule in schedules.find(query):
         schedule_id = str(schedule.get("_id"))
         for trip in schedule.get("output_table", []):
             if trip.get("plant_buffer", None) is None or trip.get("return", None) is None:
@@ -465,10 +492,20 @@ async def _get_tm_ids_and_pump_ids_by_schedule_date(target_datetime: date, user_
             pump_ids[pump_id][schedule_id] = {"start": start_time, "end": end_time, "schedule_no": schedule.get("schedule_no", )}
     return tm_ids, pump_ids
 
-async def get_available_tms_pumps(user_id: str, schedule_datetime: datetime) -> Tuple[Dict[str, Any]]:
-    tms: List[TransitMixerModel] = await transit_mixers.find({"user_id": ObjectId(user_id)}).to_list(length=None)
-    pumps: List[PumpModel] = await pumps_db.find({"user_id": ObjectId(user_id)}).to_list(length=None)
-    used_tms, used_pumps = await _get_tm_ids_and_pump_ids_by_schedule_date(schedule_datetime, user_id)
+async def get_available_tms_pumps(current_user: UserModel, schedule_datetime: datetime) -> Tuple[Dict[str, Any]]:
+    tm_query = {}
+    pump_query = {}
+    
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return [], []
+        company_id_obj = ObjectId(current_user.company_id)
+        tm_query["company_id"] = company_id_obj
+        pump_query["company_id"] = company_id_obj
+    
+    tms: List[TransitMixerModel] = await transit_mixers.find(tm_query).to_list(length=None)
+    pumps: List[PumpModel] = await pumps_db.find(pump_query).to_list(length=None)
+    used_tms, used_pumps = await _get_tm_ids_and_pump_ids_by_schedule_date(schedule_datetime, current_user)
     available_tm_list, available_pump_list = [], []
 
     for tm in tms:
@@ -497,25 +534,30 @@ async def get_available_tms_pumps(user_id: str, schedule_datetime: datetime) -> 
 
     return available_tm_list, available_pump_list
 
-async def create_schedule_draft(schedule: CalculateTM, user_id: str) -> ScheduleModel:
+async def create_schedule_draft(schedule: CalculateTM, current_user: UserModel) -> ScheduleModel:
     """Calculate the required Transit Mixer count and create a draft schedule. Always require both client and project."""
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="User must belong to a company")
+    
     # Validate and fetch project
     if not schedule.project_id:
         raise ValueError("A project_id is required to create a schedule.")
     from app.services.project_service import get_project
-    project = await get_project(schedule.project_id, user_id)
+    project = await get_project(schedule.project_id, current_user)
     if not project:
         raise ValueError("Project not found or does not belong to user.")
     client_id = getattr(project, "client_id", None)
     if not client_id:
         raise ValueError("Project does not have a client_id.")
     from app.services.client_service import get_client
-    client = await get_client(str(client_id), user_id)
+    client = await get_client(str(client_id), current_user)
     if not client:
         raise ValueError("Client not found for the given project.")
     # Prepare schedule data
     schedule_data = schedule.model_dump()
-    schedule_data["user_id"] = ObjectId(user_id)
+    schedule_data["company_id"] = ObjectId(current_user.company_id)
+    schedule_data["created_by"] = ObjectId(current_user.id)
+    schedule_data["user_id"] = ObjectId(current_user.id)  # Keep for compatibility
     schedule_data["created_at"] = datetime.utcnow()
     schedule_data["last_updated"] = datetime.utcnow()
     schedule_data["status"] = "draft"
@@ -598,7 +640,7 @@ def _ensure_dateobj(date: datetime | str) -> date:
         
     return date
 
-async def check_tm_availability(schedule_date: date, selected_tms: List[str], user_id: str) -> Dict:
+async def check_tm_availability(schedule_date: date, selected_tms: List[str], current_user: UserModel) -> Dict:
     """Check if selected TMs are available for the given date."""
     unavailable_tms = []
     
@@ -607,7 +649,7 @@ async def check_tm_availability(schedule_date: date, selected_tms: List[str], us
     
     for tm_id in selected_tms:
         # Get TM availability for this date
-        availability = await get_tm_availability(schedule_date, tm_id, user_id)
+        availability = await get_tm_availability(schedule_date, tm_id, current_user)
         
         # Check if any slot has "booked" status
         has_available_slot = False
@@ -618,7 +660,7 @@ async def check_tm_availability(schedule_date: date, selected_tms: List[str], us
         
         if not has_available_slot:
             # Get TM details for better error message
-            tm = await get_tm(tm_id, user_id)
+            tm = await get_tm(tm_id, current_user)
             if tm:
                 unavailable_tms.append({
                     "tm_id": tm_id,
@@ -930,13 +972,19 @@ def burst_schedule(
 
     return trips
 
-async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, user_id: str, type: str, partially_available_tm: Dict[str, AvailabilityBody], partially_available_pump: AvailabilityBody) -> ScheduleModel:
+async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, current_user: UserModel, type: str, partially_available_tm: Dict[str, AvailabilityBody], partially_available_pump: AvailabilityBody) -> ScheduleModel:
     """Generate the schedule based on selected Transit Mixers with single pump constraint."""
-    schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
+    query = {"_id": ObjectId(schedule_id)}
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            raise HTTPException(status_code=403, detail="User must belong to a company")
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    schedule = await schedules.find_one(query)
     if not schedule:
         raise ValueError("Schedule not found.")
 
-    avg_capacity = await get_average_capacity(user_id)
+    avg_capacity = await get_average_capacity(current_user)
     if avg_capacity == 0:
         raise ValueError("Cannot generate schedule, average capacity is 0.")
 
@@ -949,7 +997,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     print(f"Using schedule_date: {schedule_date} for all datetime fields")
     
     if schedule_date:
-        availability_check = await check_tm_availability(schedule_date, selected_tms, user_id)
+        availability_check = await check_tm_availability(schedule_date, selected_tms, current_user)
         if not availability_check["all_available"]:
             unavailable_tms = ", ".join([tm["identifier"] for tm in availability_check["unavailable_tms"]])
             raise ValueError(f"Some selected Transit Mixers are not available for this date: {unavailable_tms}")
@@ -1049,7 +1097,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     
     return await get_schedule(schedule_id, user_id)
 
-async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any]]:
+async def get_daily_schedule(date_val: date, current_user: UserModel) -> List[Dict[str, Any]]:
     """
     Get all scheduled trips for a specific date, grouped by transit mixer.
     Returns a Gantt-chart friendly format for visualizing the day's schedule.
@@ -1064,7 +1112,7 @@ async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any
             except ValueError:
                 date_val = datetime.now().date()
     
-    print(f"Getting daily schedule for date: {date_val}, user_id: {user_id}")
+    print(f"Getting daily schedule for date: {date_val}")
     
     # Convert date to datetime range for the day
     day_start = datetime.combine(date_val, time(0, 0))
@@ -1077,7 +1125,6 @@ async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any
     
     # Create a query that handles both string dates and MongoDB dates
     query = {
-        "user_id": ObjectId(user_id),
         "$or": [
             # Match string date format in ISO format
             {"output_table.plant_start": {"$regex": f"{date_val.isoformat()}"}},
@@ -1092,6 +1139,12 @@ async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any
             }
         ]
     }
+    
+    # Filter by company_id if not super admin
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
     
     print(f"Schedule query: {query}")
     
@@ -1187,7 +1240,7 @@ async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any
                 return_time = day_end
             
             # Get the TM identifier
-            tm_identifier = await get_tm_identifier(tm_id, user_id)
+            tm_identifier = await get_tm_identifier(tm_id, current_user)
             
             # Add to the data structure
             if tm_id not in tm_schedules:
@@ -1218,19 +1271,25 @@ async def get_daily_schedule(date_val: date, user_id: str) -> List[Dict[str, Any
     print(f"Returning {len(result)} TM schedules")
     return result
 
-async def get_tm_identifier(tm_id: str, user_id: str) -> str:
+async def get_tm_identifier(tm_id: str, current_user: UserModel) -> str:
     """Helper function to get the TM identifier (registration number) from its ID"""
-    from app.db.mongodb import transit_mixers
+    from app.services.tm_service import get_tm
     
     # Try to get the TM identifier from the database
-    tm = await transit_mixers.find_one({"_id": ObjectId(tm_id), "user_id": ObjectId(user_id)})
+    tm = await get_tm(tm_id, current_user)
     if tm:
-        return tm.get("identifier", tm_id)
+        return tm.identifier
     return tm_id
 
-async def toggle_burst_model(schedule_id: str, user_id: str) -> Optional[GetScheduleResponse]:
+async def toggle_burst_model(schedule_id: str, current_user: UserModel) -> Optional[GetScheduleResponse]:
     """Toggle the is_burst_model flag in the schedule's input_params"""
-    schedule = await schedules.find_one({"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)})
+    query = {"_id": ObjectId(schedule_id)}
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            raise HTTPException(status_code=403, detail="User must belong to a company")
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    schedule = await schedules.find_one(query)
     if not schedule:
         return None
     
@@ -1239,8 +1298,7 @@ async def toggle_burst_model(schedule_id: str, user_id: str) -> Optional[GetSche
     new_burst_model = not current_burst_model
     
     # Update the schedule with the new is_burst_model value
-    await schedules.update_one(
-        {"_id": ObjectId(schedule_id), "user_id": ObjectId(user_id)},
+    await schedules.update_one(query,
         {
             "$set": {
                 "input_params.is_burst_model": new_burst_model,
@@ -1250,5 +1308,5 @@ async def toggle_burst_model(schedule_id: str, user_id: str) -> Optional[GetSche
     )
     
     # Return the updated schedule
-    return await get_schedule(schedule_id, user_id)
+    return await get_schedule(schedule_id, current_user)
 

@@ -107,7 +107,9 @@ class Cancelation(BaseModel):
 class ScheduleModel(BaseModel):
     schedule_no: str = ""
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
+    user_id: PyObjectId  # Keep for backward compatibility
+    company_id: Optional[PyObjectId] = None  # Company that owns this schedule
+    created_by: Optional[PyObjectId] = None  # User who created this schedule
     project_id: Optional[PyObjectId] = None  # Now always required
     project_name: Optional[str] = "Unknown Project"
     client_id: PyObjectId   # Now always required

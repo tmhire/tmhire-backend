@@ -16,7 +16,7 @@ async def read_pumps(current_user: UserModel = Depends(get_current_user)):
     """
     Retrieve all pumps for the current user.
     """
-    pumps = await get_all_pumps(str(current_user.id))
+    pumps = await get_all_pumps(current_user)
     return StandardResponse(
         success=True,
         message="Pumps retrieved successfully",
@@ -31,7 +31,7 @@ async def read_pump(
     """
     Retrieve a specific pump by ID.
     """
-    pump = await get_pump(pump_id, str(current_user.id))
+    pump = await get_pump(pump_id, current_user)
     if not pump:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -51,7 +51,7 @@ async def create_new_pump(
     """
     Create a new pump.
     """
-    new_pump = await create_pump(pump, str(current_user.id))
+    new_pump = await create_pump(pump, current_user)
     return StandardResponse(
         success=True,
         message="Pump created successfully",
@@ -67,7 +67,7 @@ async def update_existing_pump(
     """
     Update an existing pump.
     """
-    updated_pump = await update_pump(pump_id, pump, str(current_user.id))
+    updated_pump = await update_pump(pump_id, pump, current_user)
     if not updated_pump:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -87,7 +87,7 @@ async def delete_existing_pump(
     """
     Delete a pump.
     """
-    deleted = await delete_pump(pump_id, str(current_user.id))
+    deleted = await delete_pump(pump_id, current_user)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -107,7 +107,7 @@ async def get_pumps_for_plant(
     """
     Get all pumps for a specific plant.
     """
-    pumps = await get_pumps_by_plant(plant_id, str(current_user.id))
+    pumps = await get_pumps_by_plant(plant_id, current_user)
     return StandardResponse(
         success=True,
         message="Pumps for plant retrieved successfully",
@@ -122,7 +122,7 @@ async def get_pumps_for_plant(
 #     """
 #     Get Gantt chart data for all pumps for a given date.
 #     """
-#     gantt_data = await get_pump_gantt_data(query.query_date, str(current_user.id))
+#     gantt_data = await get_pump_gantt_data(query.query_date, current_user)
 #     return StandardResponse(
 #         success=True,
 #         message="Pump Gantt calendar data retrieved successfully",

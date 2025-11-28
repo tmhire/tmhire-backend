@@ -22,7 +22,9 @@ class TimeSlot(BaseModel):
 class DailySchedule(BaseModel):
     """Represents the scheduling data for a specific date with 30-minute time slots from 8AM to 8PM"""
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
+    user_id: PyObjectId  # Keep for backward compatibility
+    company_id: Optional[PyObjectId] = None  # Company that owns this calendar entry
+    created_by: Optional[PyObjectId] = None  # User who created this calendar entry
     date: datetime
     time_slots: List[TimeSlot] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)

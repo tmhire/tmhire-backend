@@ -1,4 +1,5 @@
 from app.models.project import ProjectModel, ProjectCreate, ProjectUpdate
+from app.models.user import UserModel
 from app.db.mongodb import projects, schedules
 from typing import List, Optional, Dict, Any
 from bson import ObjectId
@@ -7,42 +8,65 @@ from app.services.client_service import get_client
 from app.services.plant_service import get_plant
 from app.services.team_service import get_team_member
 from pymongo import DESCENDING
+from fastapi import HTTPException
 
-async def get_all_projects(user_id: str) -> List[ProjectModel]:
-    """Get all projects for a user"""
+async def get_all_projects(current_user: UserModel) -> List[ProjectModel]:
+    """Get all projects for the current user's company"""
+    query = {}
+    
+    # Super admin can see all projects
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     project_list = []
-    async for project in projects.find({"user_id": ObjectId(user_id)}).sort("created_at", DESCENDING):
+    async for project in projects.find(query).sort("created_at", DESCENDING):
         project_list.append(ProjectModel(**project))
     return project_list
 
-async def get_project(id: str, user_id: str) -> Optional[ProjectModel]:
+async def get_project(id: str, current_user: UserModel) -> Optional[ProjectModel]:
     """Get a specific project by ID"""
     if id is None:
         return None
-    project = await projects.find_one({"_id": ObjectId(id), "user_id": ObjectId(user_id)})
+    
+    query = {"_id": ObjectId(id)}
+    # Super admin can see all projects
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return None
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    project = await projects.find_one(query)
     if project:
         return ProjectModel(**project)
     return None
 
-async def create_project(project: ProjectCreate, user_id: str) -> ProjectModel:
+async def create_project(project: ProjectCreate, current_user: UserModel) -> ProjectModel:
     """Create a new project"""
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="User must belong to a company")
+    
     project_data = project.model_dump()
-    project_data["user_id"] = ObjectId(user_id)
+    project_data["company_id"] = ObjectId(current_user.company_id)
+    project_data["created_by"] = ObjectId(current_user.id)
+    project_data["user_id"] = ObjectId(current_user.id)  # Keep for compatibility
     
     # Validate client exists
-    client = await get_client(str(project.client_id), user_id)
+    client = await get_client(str(project.client_id), current_user)
     if client is None:
         raise ValueError("Client ID does not exist")
     
     # Validate mother plant exists
-    mother_plant = await get_plant(str(project.mother_plant_id), user_id)
+    mother_plant = await get_plant(str(project.mother_plant_id), current_user)
     if mother_plant is None:
         raise ValueError("Mother Plant ID does not exist")
 
     # Validate sales engineer exists
-    sales_engineer = await get_team_member(str(project.sales_engineer_id), user_id)
-    if sales_engineer is None:
-        raise ValueError("Sales Engineer ID does not exist")
+    if project.sales_engineer_id:
+        sales_engineer = await get_team_member(str(project.sales_engineer_id), current_user)
+        if sales_engineer is None:
+            raise ValueError("Sales Engineer ID does not exist")
     
     project_data["created_at"] = datetime.utcnow()
     project_data["last_updated"] = datetime.utcnow()
@@ -52,46 +76,60 @@ async def create_project(project: ProjectCreate, user_id: str) -> ProjectModel:
     new_project = await projects.find_one({"_id": result.inserted_id})
     return ProjectModel(**new_project)
 
-async def update_project(id: str, project: ProjectUpdate, user_id: str) -> Optional[ProjectModel]:
+async def update_project(id: str, project: ProjectUpdate, current_user: UserModel) -> Optional[ProjectModel]:
     """Update a project"""
     project_data = {k: v for k, v in project.model_dump().items() if v is not None}
     
     if not project_data:
-        return await get_project(id, user_id)
+        return await get_project(id, current_user)
     
     # Validate client exists if being updated
     if "client_id" in project_data:
-        client = await get_client(str(project_data["client_id"]), user_id)
+        client = await get_client(str(project_data["client_id"]), current_user)
         if client is None:
             raise ValueError("Client ID does not exist")
     
     # Validate mother plant exists if being updated
     if "mother_plant_id" in project_data:
-        mother_plant = await get_plant(str(project_data["mother_plant_id"]), user_id)
+        mother_plant = await get_plant(str(project_data["mother_plant_id"]), current_user)
         if mother_plant is None:
             raise ValueError("Mother Plant ID does not exist")
     
-    # Validate sales engineer exists
-    sales_engineer = await get_team_member(str(project.sales_engineer_id), user_id)
-    if sales_engineer is None:
-        raise ValueError("Sales Engineer ID does not exist")
+    # Validate sales engineer exists if being updated
+    if project.sales_engineer_id:
+        sales_engineer = await get_team_member(str(project.sales_engineer_id), current_user)
+        if sales_engineer is None:
+            raise ValueError("Sales Engineer ID does not exist")
     
     project_data["last_updated"] = datetime.utcnow()
     
-    await projects.update_one(
-        {"_id": ObjectId(id), "user_id": ObjectId(user_id)},
-        {"$set": project_data}
-    )
+    query = {"_id": ObjectId(id)}
+    # Super admin can update any project
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            raise HTTPException(status_code=403, detail="User must belong to a company")
+        query["company_id"] = ObjectId(current_user.company_id)
     
-    return await get_project(id, user_id)
+    await projects.update_one(query, {"$set": project_data})
+    
+    return await get_project(id, current_user)
 
-async def delete_project(id: str, user_id: str) -> Dict[str, bool]:
+async def delete_project(id: str, current_user: UserModel) -> Dict[str, bool]:
     """Delete a project and check for dependencies"""
+    # Verify project exists and user has access
+    project = await get_project(id, current_user)
+    if not project:
+        return {
+            "success": False,
+            "message": "Project not found"
+        }
+    
     # Check if this project has any associated schedules
-    has_schedules = await schedules.find_one({
-        "user_id": ObjectId(user_id),
-        "project_id": ObjectId(id)
-    })
+    schedule_query = {"project_id": ObjectId(id)}
+    if current_user.role != "super_admin":
+        schedule_query["company_id"] = ObjectId(current_user.company_id)
+    
+    has_schedules = await schedules.find_one(schedule_query)
     
     if has_schedules:
         return {
@@ -100,38 +138,59 @@ async def delete_project(id: str, user_id: str) -> Dict[str, bool]:
         }
     
     # Delete the project if no dependencies
-    result = await projects.delete_one({
-        "_id": ObjectId(id),
-        "user_id": ObjectId(user_id)
-    })
+    query = {"_id": ObjectId(id)}
+    if current_user.role != "super_admin":
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    result = await projects.delete_one(query)
     
     return {
         "success": result.deleted_count > 0,
         "message": "Project deleted successfully" if result.deleted_count > 0 else "Project not found"
     }
 
-async def get_all_projects_for_client(user_id: str, client_id: str) -> List[ProjectModel]:
-    "Get all projects for a user's client"
+async def get_all_projects_for_client(current_user: UserModel, client_id: str) -> List[ProjectModel]:
+    "Get all projects for the current user's company's client"
+    query = {"client_id": ObjectId(client_id)}
+    
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     project_list = []
-    async for project in projects.find({"client_id": ObjectId(client_id), "user_id": ObjectId(user_id)}):
+    async for project in projects.find(query):
         project_list.append(ProjectModel(**project))
     return project_list
 
-async def get_all_projects_for_mother_plant(user_id: str, mother_plant_id: str) -> List[ProjectModel]:
-    "Get all projects for a user's mother plant"
+async def get_all_projects_for_mother_plant(current_user: UserModel, mother_plant_id: str) -> List[ProjectModel]:
+    "Get all projects for the current user's company's mother plant"
+    query = {"mother_plant_id": ObjectId(mother_plant_id)}
+    
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
     project_list = []
-    async for project in projects.find({"mother_plant_id": ObjectId(mother_plant_id), "user_id": ObjectId(user_id)}):
+    async for project in projects.find(query):
         project_list.append(ProjectModel(**project))
     return project_list
 
-async def get_project_schedules(id: str, user_id: str) -> Dict:
+async def get_project_schedules(id: str, current_user: UserModel) -> Dict:
     """Get all schedules for a specific project"""
-    project = await get_project(id, user_id)
+    project = await get_project(id, current_user)
     if not project:
         return {"project": None, "schedules": []}
     
+    schedule_query = {"project_id": ObjectId(id)}
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return {"project": project.model_dump(by_alias=True), "schedules": []}
+        schedule_query["company_id"] = ObjectId(current_user.company_id)
+    
     schedule_list = []
-    async for schedule in schedules.find({"project_id": ObjectId(id), "user_id": ObjectId(user_id)}):
+    async for schedule in schedules.find(schedule_query):
         schedule_list.append(schedule)
     
     return {
@@ -139,16 +198,16 @@ async def get_project_schedules(id: str, user_id: str) -> Dict:
         "schedules": schedule_list
     }
 
-async def get_client_from_project(project_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+async def get_client_from_project(project_id: str, current_user: UserModel) -> Optional[Dict[str, Any]]:
     """Get client information from a project"""
-    project = await get_project(project_id, user_id)
+    project = await get_project(project_id, current_user)
     if not project:
         return {
             "client": None,
             "project": None
         }
     
-    client = await get_client(str(project.client_id), user_id)
+    client = await get_client(str(project.client_id), current_user)
     if client:
         return {
             "client": client,
@@ -161,9 +220,9 @@ async def get_client_from_project(project_id: str, user_id: str) -> Optional[Dic
         }
 
 
-async def get_project_stats(id: str, user_id: str) -> Dict[str, Any]:
+async def get_project_stats(id: str, current_user: UserModel) -> Dict[str, Any]:
     """Get statistics for a specific project including volume metrics and trip summaries"""
-    project_schedule_list = await get_project_schedules(id, user_id)
+    project_schedule_list = await get_project_schedules(id, current_user)
     project = project_schedule_list["project"]
     all_schedules = project_schedule_list["schedules"]
     if not project:
@@ -172,7 +231,7 @@ async def get_project_stats(id: str, user_id: str) -> Dict[str, Any]:
     # Get mother plant information
     mother_plant_name = "Not Assigned"
     if project.get("mother_plant_id"):
-        mother_plant = await get_plant(str(project["mother_plant_id"]), user_id)
+        mother_plant = await get_plant(str(project["mother_plant_id"]), current_user)
         mother_plant_name = mother_plant.name if mother_plant else "Unknown Plant"
     
     # Initialize stats
@@ -216,7 +275,7 @@ async def get_project_stats(id: str, user_id: str) -> Dict[str, Any]:
             
             # Add to trip list if we have enough information
             if trip_date and trip_tm and trip_volume > 0:
-                tm = await get_tm_identifier(trip_tm, user_id)
+                tm = await get_tm_identifier(trip_tm, current_user)
                 schedule_trips.append({
                     "date": trip_date.strftime("%Y-%m-%d"),
                     "tm": tm,
@@ -252,24 +311,29 @@ async def get_project_stats(id: str, user_id: str) -> Dict[str, Any]:
         "trips": trips
     }
 
-async def get_tm_identifier(tm_id: str, user_id: str) -> str:
+async def get_tm_identifier(tm_id: str, current_user: UserModel) -> str:
     """Helper function to get the TM identifier (registration number) from its ID"""
-    from app.db.mongodb import transit_mixers
+    from app.services.tm_service import get_tm
     
     # Try to get the TM identifier from the database
-    tm = await transit_mixers.find_one({"_id": ObjectId(tm_id), "user_id": ObjectId(user_id)})
+    tm = await get_tm(tm_id, current_user)
     if tm:
-        return tm.get("identifier", tm_id)
+        return tm.identifier
     return tm_id
 
-async def migrate_projects_with_mother_plant(user_id: str, mother_plant_id: str) -> Dict[str, Any]:
+async def migrate_projects_with_mother_plant(current_user: UserModel, mother_plant_id: str) -> Dict[str, Any]:
     """Migrate existing projects to assign a mother plant"""
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="User must belong to a company")
+    
+    query = {
+        "company_id": ObjectId(current_user.company_id),
+        "mother_plant_id": {"$exists": False}
+    }
+    
     # Find all projects without mother_plant_id
     result = await projects.update_many(
-        {
-            "user_id": ObjectId(user_id),
-            "mother_plant_id": {"$exists": False}
-        },
+        query,
         {
             "$set": {
                 "mother_plant_id": ObjectId(mother_plant_id),
@@ -284,15 +348,21 @@ async def migrate_projects_with_mother_plant(user_id: str, mother_plant_id: str)
         "modified_count": result.modified_count
     }
 
-async def get_projects_without_mother_plant(user_id: str) -> List[ProjectModel]:
+async def get_projects_without_mother_plant(current_user: UserModel) -> List[ProjectModel]:
     """Get all projects that don't have a mother plant assigned"""
-    project_list = []
-    async for project in projects.find({
-        "user_id": ObjectId(user_id),
+    query = {
         "$or": [
             {"mother_plant_id": {"$exists": False}},
             {"mother_plant_id": None}
         ]
-    }):
+    }
+    
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    project_list = []
+    async for project in projects.find(query):
         project_list.append(ProjectModel(**project))
     return project_list 

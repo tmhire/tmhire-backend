@@ -17,7 +17,7 @@ async def read_clients(current_user: UserModel = Depends(get_current_user)):
     
     Returns a list of all clients belonging to the authenticated user.
     """
-    clients = await get_all_clients(str(current_user.id))
+    clients = await get_all_clients(current_user)
     return StandardResponse(
         success=True,
         message="Clients retrieved successfully",
@@ -35,7 +35,7 @@ async def create_new_client(
     Requires client details in the request body.
     Returns the newly created client with its ID.
     """
-    new_client = await create_client(client, str(current_user.id))
+    new_client = await create_client(client, current_user)
     return StandardResponse(
         success=True,
         message="Client created successfully",
@@ -55,7 +55,7 @@ async def read_client(
     
     Returns the client details if found.
     """
-    client = await get_client(client_id, str(current_user.id))
+    client = await get_client(client_id, current_user)
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -84,7 +84,7 @@ async def update_client_details(
     
     Returns the updated client details.
     """
-    updated_client = await update_client(client_id, client, str(current_user.id))
+    updated_client = await update_client(client_id, client, current_user)
     if not updated_client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -109,7 +109,7 @@ async def delete_client_record(
     
     Returns a success status and message. Will not delete clients that have associated schedules.
     """
-    result = await delete_client(client_id, str(current_user.id))
+    result = await delete_client(client_id, current_user)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -134,7 +134,7 @@ async def read_client_schedules(
     
     Returns the client details along with all their associated schedules.
     """
-    result = await get_client_schedules(client_id, str(current_user.id))
+    result = await get_client_schedules(client_id, current_user)
     if not result["client"]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,7 +163,7 @@ async def read_client_stats(
     - Pending delivery volume
     - Recent trip summaries
     """    
-    stats = await get_client_stats(client_id, str(current_user.id))
+    stats = await get_client_stats(client_id, current_user)
     return StandardResponse(
         success=True,
         message="Client statistics retrieved successfully",

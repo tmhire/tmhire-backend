@@ -1,5 +1,6 @@
 import asyncio
 from app.db.mongodb import plants, transit_mixers, schedules, pumps, clients
+from app.models.user import UserModel
 from bson import ObjectId
 from typing import List, Dict, Any
 from datetime import datetime, timedelta, date
@@ -9,24 +10,20 @@ from app.services.plant_service import get_all_plants
 from app.services.pump_service import get_all_pumps
 from app.services.schedule_calendar_service import _ensure_dateobj, _parse_datetime_with_timezone
 from app.services.tm_service import get_all_tms
+from fastapi import HTTPException
 
-async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, Any]:
-    """Get all dashboard statistics for a user."""
-    # Convert string user_id to ObjectId
-    user_id_obj = ObjectId(user_id)
+async def get_dashboard_stats(date_val: date | str, current_user: UserModel) -> Dict[str, Any]:
+    """Get all dashboard statistics for the current user's company."""
+    if not current_user.company_id:
+        raise HTTPException(status_code=400, detail="User must belong to a company")
     
     date_val = _ensure_dateobj(date_val)
     day_start = datetime.combine(date_val, datetime.min.time())
     day_end = datetime.combine(date_val, datetime.max.time())
 
     # Get counts
-    all_plants, all_tms, all_pumps, schedules_in_date = await asyncio.gather(
-        get_all_plants(user_id),
-        get_all_tms(user_id),
-        get_all_pumps(user_id),
-        schedules.find({
-            "user_id": ObjectId(user_id_obj),
-            "status": "generated",
+    schedule_query = {
+        "status": "generated",
             "$or": [
             {
                 "output_table.plant_start": {
@@ -53,7 +50,17 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
                 }
             }
         ]
-        }).sort("created_at", DESCENDING).to_list(length=None)
+    }
+    
+    # Filter by company_id if not super admin
+    if current_user.role != "super_admin":
+        schedule_query["company_id"] = ObjectId(current_user.company_id)
+    
+    all_plants, all_tms, all_pumps, schedules_in_date = await asyncio.gather(
+        get_all_plants(current_user),
+        get_all_tms(current_user),
+        get_all_pumps(current_user),
+        schedules.find(schedule_query).sort("created_at", DESCENDING).to_list(length=None)
     )
 
     active_plants_count, inactive_plants_count = 0, 0
@@ -194,10 +201,10 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         column["boom_pump_used_total_hours"] = round(column["boom_pump_used_total_hours"], 2)
 
     # Calculate monthly statistics for the past 12 months
-    monthly_stats = await get_monthly_stats(user_id_obj)
+    monthly_stats = await get_monthly_stats(current_user)
 
     # Get recent orders
-    recent_orders = await get_recent_orders(user_id_obj)
+    recent_orders = await get_recent_orders(current_user)
     
     # Format the response according to the required structure
     return {
@@ -225,7 +232,7 @@ async def get_dashboard_stats(date_val: date | str, user_id: str) -> Dict[str, A
         "recent_orders": recent_orders
     }
 
-async def get_monthly_stats(user_id: ObjectId) -> Dict[str, List[float]]:
+async def get_monthly_stats(current_user: UserModel) -> Dict[str, List[float]]:
     """Get pumping quantity and TMs used for the last 12 months."""
     current_date = datetime.now()
     series = {
@@ -241,13 +248,22 @@ async def get_monthly_stats(user_id: ObjectId) -> Dict[str, List[float]]:
         month_end = datetime(target_month.year, target_month.month, days_in_month, 23, 59, 59)
         
         # Get all schedules for this month
-        month_schedules = schedules.find({
-            "user_id": user_id,
+        month_query = {
             "created_at": {
                 "$gte": month_start,
                 "$lt": month_end
             }
-        })
+        }
+        
+        # Filter by company_id if not super admin
+        if current_user.role != "super_admin":
+            if not current_user.company_id:
+                series["pumping_quantity"].append(0.0)
+                series["tms_used"].append(0.0)
+                continue
+            month_query["company_id"] = ObjectId(current_user.company_id)
+        
+        month_schedules = schedules.find(month_query)
         
         monthly_quantity = 0
         monthly_tms = set()
@@ -272,10 +288,17 @@ async def get_monthly_stats(user_id: ObjectId) -> Dict[str, List[float]]:
     
     return series
 
-async def get_recent_orders(user_id: ObjectId, limit: int = 10) -> List[Dict[str, Any]]:
+async def get_recent_orders(current_user: UserModel, limit: int = 10) -> List[Dict[str, Any]]:
     """Get recent orders with client, quantity, and status information."""
     recent_orders = []
-    cursor = schedules.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+    
+    query = {}
+    if current_user.role != "super_admin":
+        if not current_user.company_id:
+            return []
+        query["company_id"] = ObjectId(current_user.company_id)
+    
+    cursor = schedules.find(query).sort("created_at", -1).limit(limit)
     
     async for order in cursor:
         quantity = order.get("input_params", {}).get("quantity", 0)

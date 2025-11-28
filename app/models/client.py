@@ -6,7 +6,9 @@ from bson import ObjectId
 
 class ClientModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
+    user_id: PyObjectId  # Keep for backward compatibility
+    company_id: Optional[PyObjectId] = None  # Company that owns this client
+    created_by: Optional[PyObjectId] = None  # User who created this client
     name: str
     legal_entity: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

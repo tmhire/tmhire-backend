@@ -6,7 +6,9 @@ from bson import ObjectId
 
 class ProjectModel(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
-    user_id: PyObjectId
+    user_id: PyObjectId  # Keep for backward compatibility
+    company_id: Optional[PyObjectId] = None  # Company that owns this project
+    created_by: Optional[PyObjectId] = None  # User who created this project
     client_id: PyObjectId
     mother_plant_id: Optional[PyObjectId] = None
     sales_engineer_id: Optional[PyObjectId] = None

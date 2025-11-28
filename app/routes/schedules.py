@@ -28,7 +28,7 @@ async def read_schedules(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Get all schedules for the current user"""
-    schedules = await get_all_schedules(user_id=str(current_user.id), type=type)
+    schedules = await get_all_schedules(current_user=current_user, type=type)
     
     schedules = keep_first_and_last_trip(schedules=schedules)
     
@@ -53,7 +53,7 @@ async def read_schedules(
     if not to_date:
         to_date = from_date
 
-    schedules = await get_all_schedules(user_id=str(current_user.id), type=type, from_date=from_date, to_date=to_date, isFromReports=True)
+    schedules = await get_all_schedules(current_user=current_user, type=type, from_date=from_date, to_date=to_date, isFromReports=True)
         
     # Safely serialize to handle any date/datetime objects
     schedule_list = [schedule.model_dump() for schedule in schedules]
@@ -79,7 +79,7 @@ async def read_daily_schedule(
     Returns a Gantt-chart friendly array of TM schedules for the day.
     Each TM has an array of trips with their start/end times and client info.
     """
-    daily_schedule = await get_daily_schedule(date, str(current_user.id))
+    daily_schedule = await get_daily_schedule(date, current_user)
     
     # Safely serialize to handle any date/datetime objects
     safe_data = safe_serialize(daily_schedule)
@@ -101,7 +101,7 @@ async def read_schedule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Schedule ID is required"
         )
-    schedule = await get_schedule(schedule_id, str(current_user.id))
+    schedule = await get_schedule(schedule_id, current_user)
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -128,7 +128,7 @@ async def create_schedule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Both project_id and client_id are required to create a schedule."
         )
-    result = await create_schedule_draft(schedule, str(current_user.id))
+    result = await create_schedule_draft(schedule, current_user)
     return StandardResponse(
         success=True,
         message="Transit mixer count calculated successfully",
@@ -147,7 +147,7 @@ async def update_existing_schedule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="client_id is required when updating project_id."
         )
-    updated_schedule = await update_schedule(schedule_id, schedule, str(current_user.id))
+    updated_schedule = await update_schedule(schedule_id, schedule, current_user)
     if not updated_schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -169,7 +169,7 @@ async def toggle_schedule_burst_model(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Toggle the is_burst_model flag for a schedule by ID."""
-    updated_schedule = await toggle_burst_model(schedule_id, str(current_user.id))
+    updated_schedule = await toggle_burst_model(schedule_id, current_user)
     if not updated_schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -199,7 +199,7 @@ async def delete_existing_schedule(
         id=schedule_id, 
         delete_type=delete_type, 
         cancelation={ "canceled_by": canceled_by, "reason": cancel_reason }, 
-        user_id=str(current_user.id)
+        user_id=current_user
     )
     
     type = "canceled" if delete_type == DeleteType.cancel else "deleted"
@@ -241,7 +241,7 @@ async def delete_existing_schedule(
 #     - tm_count: Number of transit mixers required
 #     - tm_identifiers: List of transit mixer identifiers (A, B, C, ...)
 #     """
-#     result = await create_schedule_draft(schedule, str(current_user.id))
+#     result = await create_schedule_draft(schedule, current_user)
 #     return StandardResponse(
 #         success=True,
 #         message="Transit mixer count calculated successfully",
@@ -279,7 +279,7 @@ async def generate_schedule_endpoint(
             schedule_id=schedule_id, 
             selected_tms=selected_tms, 
             pump_id=pump_id, 
-            user_id=str(current_user.id), 
+            user_id=current_user, 
             type=body.type, 
             partially_available_tm=body.partially_available_tm, 
             partially_available_pump=body.partially_available_pump

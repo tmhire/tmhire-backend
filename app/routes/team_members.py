@@ -13,7 +13,7 @@ router = APIRouter(tags=["Team Members"])
 @router.get("/", response_model=StandardResponse[List[TeamMemberModel]])
 async def read_teams(current_user: UserModel = Depends(get_current_user)):
     """Get all team members for the current user"""
-    teams = await get_all_teams(str(current_user.id))
+    teams = await get_all_teams(current_user)
     return StandardResponse(
         success=True,
         message="Team members retrieved successfully",
@@ -26,7 +26,7 @@ async def create_new_team_member(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Create a new team member"""
-    new_member = await create_team_member(member, str(current_user.id))
+    new_member = await create_team_member(member, current_user)
     return StandardResponse(
         success=True,
         message="Team member created successfully",
@@ -39,7 +39,7 @@ async def read_team_member(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Get a specific team member by ID"""
-    member = await get_team_member(member_id, str(current_user.id))
+    member = await get_team_member(member_id, current_user)
     if not member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -58,7 +58,7 @@ async def update_team(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Update a team member"""
-    updated_member = await update_team_member(member_id, member, str(current_user.id))
+    updated_member = await update_team_member(member_id, member, current_user)
     if not updated_member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -76,7 +76,7 @@ async def delete_team(
     current_user: UserModel = Depends(get_current_user)
 ):
     """Delete a team member"""
-    result = await delete_team_member(member_id, str(current_user.id))
+    result = await delete_team_member(member_id, current_user)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,7 +91,7 @@ async def delete_team(
 @router.get("/group/{group}", response_model=StandardResponse[List[TeamMemberModel]])
 async def read_group_team(group: Literal["client", "pump", "schedule"], current_user: UserModel = Depends(get_current_user)):
     """Get all team members in a group for the current user"""
-    teams = await get_team_group(group, str(current_user.id))
+    teams = await get_team_group(group, current_user)
     return StandardResponse(
         success=True,
         message="Team members retrieved successfully",

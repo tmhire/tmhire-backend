@@ -41,7 +41,7 @@ async def get_gantt_calendar(
         - client: Client name
         - type: Task type (production, cleaning, setup, quality, maintenance)
     """
-    gantt_data = await get_gantt_data(query.query_date, str(current_user.id))
+    gantt_data = await get_gantt_data(query.query_date, current_user)
     return StandardResponse(
         success=True,
         message="Gantt calendar data retrieved successfully",
@@ -64,7 +64,7 @@ async def get_plant_gantt_calendar(
     - tasks: list of load segments with TM id and metadata
     - hourly_utilization: per-hour TM count and TM ids
     """
-    data = await get_plant_gantt_data(query.query_date, str(current_user.id))
+    data = await get_plant_gantt_data(query.query_date, current_user)
     return StandardResponse(
         success=True,
         message="Plant-based gantt data retrieved successfully",
@@ -89,7 +89,7 @@ async def get_calendar(
     - date: The calendar date
     - time_slots: List of time slots with TM availability
     """
-    calendar_data = await get_calendar_for_date_range(query, str(current_user.id))
+    calendar_data = await get_calendar_for_date_range(query, current_user)
     return StandardResponse(
         success=True,
         message="Calendar data retrieved successfully",
@@ -117,7 +117,7 @@ async def get_tm_availability_slots(
     - status: 'available' or 'booked'
     - schedule_id: ID of the booking schedule (if booked)
     """
-    availability_data = await get_tm_availability(date_val, tm_id, str(current_user.id))
+    availability_data = await get_tm_availability(date_val, tm_id, current_user)
     return StandardResponse(
         success=True,
         message="Transit mixer availability slots retrieved successfully",

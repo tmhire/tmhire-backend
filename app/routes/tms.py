@@ -21,7 +21,7 @@ async def read_tms(current_user: UserModel = Depends(get_current_user)):
     Returns a list of all transit mixers with their details including capacity,
     identifier, and plant association.
     """
-    tms = await get_all_tms(str(current_user.id))
+    tms = await get_all_tms(current_user)
     return StandardResponse(
         success=True,
         message="Transit mixers retrieved successfully",
@@ -41,7 +41,7 @@ async def update_tm_status(
 
     Returns the updated transit mixer details.
     """
-    tm = await get_tm(tm_id, str(current_user.id))
+    tm = await get_tm(tm_id, current_user)
     if not tm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -53,7 +53,7 @@ async def update_tm_status(
     else:
         new_status = "active"
     tm.status = new_status
-    updated_tm = await update_tm(tm_id, tm, str(current_user.id))
+    updated_tm = await update_tm(tm_id, tm, current_user)
     return StandardResponse(
         success=True,
         message="Transit mixer status updated successfully",
@@ -77,7 +77,7 @@ async def create_transit_mixer(
     
     Returns the newly created transit mixer with its ID.
     """
-    new_tm = await create_tm(tm, str(current_user.id))
+    new_tm = await create_tm(tm, current_user)
     return StandardResponse(
         success=True,
         message="Transit mixer created successfully",
@@ -92,7 +92,7 @@ async def read_average_capacity(current_user: UserModel = Depends(get_current_us
     Returns a single value representing the average capacity across all
     transit mixers owned by the user.
     """
-    avg_capacity = await get_average_capacity(str(current_user.id))
+    avg_capacity = await get_average_capacity(current_user)
     return StandardResponse(
         success=True,
         message="Average capacity retrieved successfully",
@@ -117,7 +117,7 @@ async def read_average_capacity(current_user: UserModel = Depends(get_current_us
 #         parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
         
 #         # Get available TMs
-#         tms = await get_available_tms(parsed_date, str(current_user.id))
+#         tms = await get_available_tms(parsed_date, current_user)
         
 #         # Convert to dict for safer serialization
 #         tm_list = [tm.model_dump() for tm in tms]
@@ -154,7 +154,7 @@ async def read_tm(
     
     Returns the transit mixer details if found.
     """
-    tm = await get_tm(tm_id, str(current_user.id))
+    tm = await get_tm(tm_id, current_user)
     if not tm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -186,7 +186,7 @@ async def update_transit_mixer(
     
     Returns the updated transit mixer details.
     """
-    updated_tm = await update_tm(tm_id, tm, str(current_user.id))
+    updated_tm = await update_tm(tm_id, tm, current_user)
     if not updated_tm:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -211,7 +211,7 @@ async def delete_transit_mixer(
     
     Returns a success message on successful deletion.
     """
-    deleted = await delete_tm(tm_id, str(current_user.id))
+    deleted = await delete_tm(tm_id, current_user)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -245,14 +245,14 @@ async def read_tm_availability(
         # Parse date string
         parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
         
-        tm = await get_tm(tm_id, str(current_user.id))
+        tm = await get_tm(tm_id, current_user)
         if not tm:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Transit mixer not found"
             )
         
-        availability_data = await get_tm_availability_slots(tm_id, parsed_date, str(current_user.id))
+        availability_data = await get_tm_availability_slots(tm_id, parsed_date, current_user)
         
         # Convert any date/datetime objects in the result to strings for safe serialization
         safe_data = safe_serialize(availability_data)
