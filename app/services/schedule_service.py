@@ -11,6 +11,7 @@ from app.services.pump_service import get_all_pumps
 from app.services.team_service import get_team_member
 from app.services.tm_service import get_all_tms, get_average_capacity, get_tm
 from app.services.schedule_calendar_service import update_calendar_after_schedule, get_tm_availability
+from app.services.auth_service import get_user
 from datetime import datetime, timedelta, date, time
 from bson import ObjectId
 from typing import List, Optional, Dict, Any, Tuple
@@ -974,6 +975,15 @@ def burst_schedule(
 
 async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: str, current_user: UserModel, type: str, partially_available_tm: Dict[str, AvailabilityBody], partially_available_pump: AvailabilityBody) -> ScheduleModel:
     """Generate the schedule based on selected Transit Mixers with single pump constraint."""
+    if isinstance(current_user, str):
+        fetched_user = await get_user(current_user)
+        if not fetched_user:
+            raise HTTPException(status_code=403, detail="User not found")
+        current_user = fetched_user
+    elif isinstance(current_user, dict):
+        current_user = UserModel(**current_user)
+    elif not isinstance(current_user, UserModel):
+        raise HTTPException(status_code=403, detail="Invalid user context")
     query = {"_id": ObjectId(schedule_id)}
     if current_user.role != "super_admin":
         if not current_user.company_id:
@@ -1095,7 +1105,7 @@ async def generate_schedule(schedule_id: str, selected_tms: List[str], pump_id: 
     # Update the calendar for this schedule
     await update_calendar_after_schedule(schedule_model)
     
-    return await get_schedule(schedule_id, user_id)
+    return await get_schedule(schedule_id, current_user)
 
 async def get_daily_schedule(date_val: date, current_user: UserModel) -> List[Dict[str, Any]]:
     """

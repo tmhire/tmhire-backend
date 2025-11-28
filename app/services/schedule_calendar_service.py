@@ -8,6 +8,7 @@ from typing import List, Dict, Optional, Any
 import asyncio
 import math
 from app.services.tm_service import get_average_capacity
+from app.services.auth_service import get_user
 from fastapi import HTTPException
 
 # Constants for calendar setup
@@ -105,9 +106,19 @@ async def get_calendar_for_date_range(
 
 async def initialize_calendar_day(
     day_date: date, 
-    current_user: UserModel
+    current_user: UserModel | str | Dict[str, Any]
 ) -> Optional[DailySchedule]:
     """Initialize calendar data for a specific date with 30-minute time slots from 8AM to 8PM"""
+    if isinstance(current_user, str):
+        fetched_user = await get_user(current_user)
+        if not fetched_user:
+            raise HTTPException(status_code=404, detail="User not found for calendar initialization")
+        current_user = fetched_user
+    elif isinstance(current_user, dict):
+        current_user = UserModel(**current_user)
+    elif not isinstance(current_user, UserModel):
+        raise HTTPException(status_code=400, detail="Invalid user context for calendar initialization")
+
     if not current_user.company_id:
         return None
     
