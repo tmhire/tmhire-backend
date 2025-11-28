@@ -614,7 +614,7 @@ async def create_schedule_draft(schedule: CalculateTM, current_user: UserModel) 
     # tm_suggestion = await calculate_tm_suggestions(user_id, InputParams(**input_params))
     # schedule_data["tm_count"] = tm_suggestion["tm_count"]
     result = await schedules.insert_one(schedule_data)
-    new_schedule = await schedules.find_one({"_id": result.inserted_id, "user_id": ObjectId(user_id)})
+    new_schedule = await schedules.find_one({"_id": result.inserted_id})
     if new_schedule:
         return ScheduleModel(**new_schedule)
     return None

@@ -199,7 +199,7 @@ async def delete_existing_schedule(
         id=schedule_id, 
         delete_type=delete_type, 
         cancelation={ "canceled_by": canceled_by, "reason": cancel_reason }, 
-        user_id=current_user
+        current_user=current_user
     )
     
     type = "canceled" if delete_type == DeleteType.cancel else "deleted"
