@@ -30,10 +30,12 @@ def send_otp_email(email: str, otp: str) -> bool:
         msg = MIMEMultipart()
         msg["From"] = EMAIL_FROM
         msg["To"] = email
-        msg["Subject"] = "Your password reset OTP"
+        msg["Subject"] = "Your password reset OTP from TM GRID"
         
         # Email body
-        body = f"""Your password reset OTP is {otp}. It will expire in 10 minutes.
+        body = f"""TM GRID - PASSWORD RESET OTP
+        
+Your password reset OTP is {otp}. It will expire in 10 minutes.
         
 If you did not request this password reset, please ignore this email.
 """
