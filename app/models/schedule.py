@@ -144,6 +144,10 @@ class ScheduleModel(BaseModel):
     trip_count: Optional[int] = None
     is_round_trip: Optional[bool] = False
     cancelation: Optional[Cancelation] = None
+    field_technician_id: Optional[PyObjectId] = None
+    field_technician_name: Optional[str] = None
+    cube_at_site: Optional[bool] = False
+    credit_terms: Optional[str] = Field(None, max_length=20)
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -231,6 +235,10 @@ class ScheduleCreate(BaseModel):
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
+    field_technician_id: Optional[PyObjectId] = None
+    field_technician_name: Optional[str] = None
+    cube_at_site: Optional[bool] = False
+    credit_terms: Optional[str] = Field(None, max_length=20)
     # pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
@@ -308,6 +316,10 @@ class ScheduleUpdate(BaseModel):
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
+    field_technician_id: Optional[PyObjectId] = None
+    field_technician_name: Optional[str] = None
+    cube_at_site: Optional[bool] = False
+    credit_terms: Optional[str] = Field(None, max_length=20)
     site_address: Optional[str] = None
     input_params: Optional[InputParams] = None
     status: Optional[str] = None

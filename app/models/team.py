@@ -10,7 +10,7 @@ class TeamMemberModel(BaseModel):
     company_id: Optional[PyObjectId] = None  # Company that owns this team member
     created_by: Optional[PyObjectId] = None  # User who created this team member
     name: str
-    designation: Literal["sales-engineer", "pump-operator", "pipeline-gang", "site-supervisor"]
+    designation: Literal["sales-engineer", "pump-operator", "pipeline-gang", "site-supervisor", "field-technician"]
     contact: int
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -32,7 +32,7 @@ class TeamMemberModel(BaseModel):
 
 class TeamMemberCreate(BaseModel):
     name: str
-    designation: Literal["sales-engineer", "pump-operator", "pipeline-gang", "site-supervisor"]
+    designation: Literal["sales-engineer", "pump-operator", "pipeline-gang", "site-supervisor", "field-technician"]
     contact: int
 
     model_config = ConfigDict(

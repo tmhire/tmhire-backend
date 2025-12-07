@@ -10,7 +10,7 @@ from fastapi import HTTPException
 groupSet = {
     "client": ["sales-engineer"],
     "pump": ["pump-operator", "pipeline-gang"],
-    "schedule": ["site-supervisor"]
+    "schedule": ["site-supervisor", "field-technician"]
 }
 
 async def get_all_teams(current_user: UserModel) -> List[TeamMemberModel]:

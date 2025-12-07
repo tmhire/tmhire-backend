@@ -197,6 +197,11 @@ async def get_schedule(id: str, current_user: UserModel) -> Optional[GetSchedule
         if supervisor:
             schedule["site_supervisor_name"] = supervisor.model_dump().get("name", "Unknown Supervisor")
 
+        # Add field technician name to the schedule's response
+        field_technician = await get_team_member(schedule.get("field_technician_id", None), current_user)
+        if field_technician:
+            schedule["field_technician_name"] = field_technician.model_dump().get("name", "Unknown Field Technician")
+
         # Convert string time values to datetime objects if they are in old format
         current_date = datetime.now().date()
         for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
