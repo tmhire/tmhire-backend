@@ -2,7 +2,15 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.company import CompanyCreate, CompanyModel
 from app.models.user import CompanyUserModel, UserLogin, UserModel, UserCreate, UserUpdate
-from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, onboard_user, refreshing_access_token, update_user_data, validate_google_token, verify_password
+from app.models.otp import ForgotPasswordRequest, VerifyOTPRequest
+from app.services.auth_service import create_refresh_token, create_user, create_access_token, get_current_user, get_user_by_email, onboard_user, refreshing_access_token, update_user_data, validate_google_token, verify_password, hash_password
+from app.services.otp_service import (
+    create_otp, get_latest_valid_otp, increment_otp_attempts, 
+    mark_otp_as_used, invalidate_user_otps, verify_otp, MAX_OTP_ATTEMPTS
+)
+from app.services.email_service import send_otp_email
+from app.db.mongodb import users
+from bson import ObjectId
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 from app.schemas.response import StandardResponse
@@ -348,6 +356,134 @@ async def onboard(company_data: CompanyCreate, current_user: UserModel = Depends
             detail=str(e) or "Failed to update user",
         )
 
+
+@router.post("/forgot-password/request-otp")
+async def request_password_reset_otp(request: ForgotPasswordRequest):
+    """
+    Request a password reset OTP.
+    
+    This endpoint:
+    1. Checks if a user with the given email exists
+    2. If user exists: generates OTP, stores it (hashed), and sends it via email
+    3. If user does NOT exist: returns a clear error message
+    
+    IMPORTANT: This endpoint reveals whether an email is registered or not.
+    """
+    try:
+        # Check if user exists
+        user = await get_user_by_email(request.email)
+        
+        if not user:
+            # Explicitly tell the user that the email is not registered
+            return StandardResponse(
+                success=False,
+                message="No account found for this email.",
+                data=None
+            )
+        
+        # Invalidate any existing unused OTPs for this user
+        await invalidate_user_otps(user.id, request.email)
+        
+        # Generate and store OTP
+        raw_otp, otp_model = await create_otp(user.id, request.email)
+        
+        # Send OTP via email (this is synchronous but can be moved to background task)
+        email_sent = send_otp_email(request.email, raw_otp)
+        
+        if not email_sent:
+            # Log that email sending failed, but don't expose this to the user
+            # In production, you might want to queue this for retry
+            print(f"Warning: Failed to send OTP email to {request.email}, but OTP was generated: {raw_otp}")
+        
+        # Always return success message (security: don't reveal if email sending failed)
+        return StandardResponse(
+            success=True,
+            message="OTP sent successfully to your email.",
+            data=None
+        )
+        
+    except Exception as e:
+        print(f"Error in request_password_reset_otp: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process password reset request",
+        )
+
+@router.post("/forgot-password/verify-otp")
+async def verify_password_reset_otp(request: VerifyOTPRequest):
+    """
+    Verify OTP and reset password.
+    
+    This endpoint:
+    1. Validates the email exists
+    2. Checks if a valid OTP exists for the user
+    3. Verifies the OTP (with attempt limits)
+    4. Updates the user's password if OTP is valid
+    """
+    try:
+        # Find user by email
+        user = await get_user_by_email(request.email)
+        
+        if not user:
+            return StandardResponse(
+                success=False,
+                message="No account found for this email.",
+                data=None
+            )
+        
+        # Get the latest valid OTP
+        otp_model = await get_latest_valid_otp(user.id, request.email)
+        
+        if not otp_model:
+            return StandardResponse(
+                success=False,
+                message="Invalid or expired OTP.",
+                data=None
+            )
+        
+        # Check if attempts exceeded
+        if otp_model.attempts_count >= MAX_OTP_ATTEMPTS:
+            return StandardResponse(
+                success=False,
+                message="Too many attempts. Please request a new OTP.",
+                data=None
+            )
+        
+        # Verify OTP
+        if not verify_otp(request.otp, otp_model.otp_hash):
+            # Increment attempts
+            await increment_otp_attempts(otp_model.id)
+            
+            return StandardResponse(
+                success=False,
+                message="Invalid OTP.",
+                data=None
+            )
+        
+        # OTP is valid - update password
+        hashed_password = hash_password(request.new_password)
+        
+        # Update user password
+        await users.update_one(
+            {"_id": user.id},
+            {"$set": {"password": hashed_password, "last_updated": datetime.utcnow()}}
+        )
+        
+        # Mark OTP as used
+        await mark_otp_as_used(otp_model.id)
+        
+        return StandardResponse(
+            success=True,
+            message="Password has been reset successfully.",
+            data=None
+        )
+        
+    except Exception as e:
+        print(f"Error in verify_password_reset_otp: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to verify OTP and reset password",
+        )
 
 @router.put("/{user_id}", response_model=StandardResponse[UserModel])
 async def update_user(user_id: str, user_data: UserUpdate, current_user: UserModel = Depends(get_current_user)):

@@ -28,6 +28,7 @@ clients = database.clients
 projects = database.projects
 pumps = database.pumps
 team = database.team
+password_reset_otps = database.password_reset_otps
 
 # Helper class for converting between MongoID and string
 class PyObjectId(ObjectId):
