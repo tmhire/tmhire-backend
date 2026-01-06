@@ -14,7 +14,7 @@ from app.services.schedule_calendar_service import update_calendar_after_schedul
 from app.services.auth_service import get_user
 from datetime import datetime, timedelta, date, time
 from bson import ObjectId
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Union
 from app.schemas.utils import safe_serialize
 from fastapi import HTTPException
 import math
@@ -30,7 +30,7 @@ UNLOADING_TIME_LOOKUP = {
     12: 20
 }
 
-async def get_all_schedules(current_user: UserModel, type: ScheduleType, from_date: date | str = datetime.now().date(), to_date: date | str = datetime.now().date(), isFromReports = False) -> List[ScheduleModel]:
+async def get_all_schedules(current_user: UserModel, type: ScheduleType, from_date: Union[date, str] = datetime.now().date(), to_date: Union[date, str] = datetime.now().date(), isFromReports = False) -> List[ScheduleModel]:
     schedule_list = []
     query = {}
     
@@ -139,7 +139,7 @@ def keep_first_and_last_trip(schedules: List[ScheduleModel]) -> List[ScheduleMod
             schedule.burst_table = [schedule.burst_table[0], schedule.burst_table[-1]]
     return schedules
 
-def _convert_to_datetime(date_str: str | datetime) -> datetime:
+def _convert_to_datetime(date_str: Union[str, datetime]) -> datetime:
     if isinstance(date_str, str):
         try:
             date_str = datetime.fromisoformat(date_str)
@@ -344,7 +344,7 @@ async def update_schedule(id: str, schedule: ScheduleUpdate, current_user: UserM
         
     return updated_schedule
 
-async def delete_schedule(id: str, delete_type: DeleteType, cancelation: Cancelation, current_user: UserModel) -> Dict[str, str | bool]:
+async def delete_schedule(id: str, delete_type: DeleteType, cancelation: Cancelation, current_user: UserModel) -> Dict[str, Union[str, bool]]:
     query = {"_id": ObjectId(id)}
     if current_user.role != "super_admin":
         if not current_user.company_id:
@@ -624,7 +624,7 @@ async def create_schedule_draft(schedule: CalculateTM, current_user: UserModel) 
         return ScheduleModel(**new_schedule)
     return None
 
-def _ensure_dateobj(date: datetime | str) -> date:
+def _ensure_dateobj(date: Union[datetime, str]) -> date:
     # Convert date to date object if it's a string
     if date and isinstance(date, str):
         try:

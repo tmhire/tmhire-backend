@@ -4,7 +4,7 @@ from app.models.schedule import ScheduleModel
 from app.models.user import UserModel
 from datetime import datetime, date, time, timedelta, timezone
 from bson import ObjectId
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 import asyncio
 import math
 from app.services.tm_service import get_average_capacity
@@ -106,7 +106,7 @@ async def get_calendar_for_date_range(
 
 async def initialize_calendar_day(
     day_date: date, 
-    current_user: UserModel | str | Dict[str, Any]
+    current_user: Union[UserModel, str, Dict[str, Any]]
 ) -> Optional[DailySchedule]:
     """Initialize calendar data for a specific date with 30-minute time slots from 8AM to 8PM"""
     if isinstance(current_user, str):
@@ -325,7 +325,7 @@ async def initialize_calendar_day(
     # Return the calendar day
     return DailySchedule(**await schedule_calendar.find_one({"_id": result.inserted_id}))
 
-def _ensure_dateobj(date: datetime | str) -> date:
+def _ensure_dateobj(date: Union[datetime, str]) -> date:
     # Convert date to date object if it's a string
     if date and isinstance(date, str):
         try:

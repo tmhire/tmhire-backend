@@ -114,12 +114,12 @@ class ScheduleModel(BaseModel):
     project_name: Optional[str] = "Unknown Project"
     client_id: PyObjectId   # Now always required
     client_name: str
-    plant_id: Optional[PyObjectId | str] = ""
+    plant_id: Optional[Union[PyObjectId, str]] = ""
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
     mother_plant_name: Optional[str] = "Unknown Plant"
-    pump: Optional[PyObjectId | str] = None
+    pump: Optional[Union[PyObjectId, str]] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -128,7 +128,7 @@ class ScheduleModel(BaseModel):
     output_table: Optional[List[Trip]] = Field(default_factory=list)
     burst_table: Optional[List[BurstTrip]] = Field(default_factory=list)
     tm_count: Optional[int] = None
-    concreteGrade: Optional[Union[int | str]] = None  # e.g., M20, M25, etc.
+    concreteGrade: Optional[Union[int, str]] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     mix_code: Optional[str] = None
     remarks: Optional[str] = None
@@ -231,7 +231,7 @@ class ScheduleCreate(BaseModel):
     project_id: str
     client_id: str  # Now required
     client_name: Optional[str] = None
-    plant_id: Optional[PyObjectId | str] = ""
+    plant_id: Optional[Union[PyObjectId, str]] = ""
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
@@ -242,7 +242,7 @@ class ScheduleCreate(BaseModel):
     # pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None  # e.g., Boom Pump, Line Pump, etc.
     site_address: Optional[str] = None
-    concreteGrade: Optional[Union[int | str]] = None  # e.g., M20, M25, etc.
+    concreteGrade: Optional[Union[int, str]] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     mix_code: Optional[str] = None
     remarks: Optional[str] = None
@@ -312,7 +312,7 @@ class ScheduleUpdate(BaseModel):
     project_id: Optional[str] = None
     client_id: Optional[str] = None  # Now required for update if project_id is updated
     client_name: Optional[str] = None
-    plant_id: Optional[PyObjectId | str] = ""
+    plant_id: Optional[Union[PyObjectId, str]] = ""
     plant_name: Optional[str] = "Unknown Plant"
     site_supervisor_id: Optional[PyObjectId] = None
     site_supervisor_name: Optional[str] = None
@@ -326,7 +326,7 @@ class ScheduleUpdate(BaseModel):
     pump: Optional[PyObjectId] = None
     pump_type: Optional[PumpType] = None
     pumping_speed: Optional[int] = None  # Concrete pumping speed in cubic meters per hour
-    concreteGrade: Optional[Union[int | str]] = None  # e.g., M20, M25, etc.
+    concreteGrade: Optional[Union[int, str]] = None  # e.g., M20, M25, etc.
     pumping_job: Optional[str] = None
     mix_code: Optional[str] = None
     remarks: Optional[str] = None

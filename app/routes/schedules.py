@@ -45,8 +45,8 @@ async def read_schedules(
 @router.get("/reports", response_model=StandardResponse[List[ScheduleModel]])
 async def read_schedules(
     type: ScheduleType = Query(ScheduleType.all, description="Filter schedules by type: 'supply' or 'pumping'"),
-    from_date: date | str = Query(datetime.now().date(), description="Filter schedules by from date"),
-    to_date: date | str = Query(datetime.now().date(), description="Filter schedules by to date"),
+    from_date: Union[date, str] = Query(datetime.now().date(), description="Filter schedules by from date"),
+    to_date: Union[date, str] = Query(datetime.now().date(), description="Filter schedules by to date"),
     current_user: UserModel = Depends(get_current_user)
 ):
     """Get all schedules for the current user"""

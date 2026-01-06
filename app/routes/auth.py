@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Union
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.company import CompanyCreate, CompanyModel
 from app.models.user import CompanyUserModel, UserLogin, UserModel, UserCreate, UserUpdate
@@ -46,9 +46,9 @@ class TokenWithNewUser(BaseModel):
     refresh_token: str
     token_type: str
     new_user: bool
-    company: str | None
-    city: str | None
-    contact: int | None
+    company: Union[str, None]
+    city: Union[str, None]
+    contact: Union[int, None]
     
     class Config:
         schema_extra = {
@@ -63,11 +63,11 @@ class User(CompanyUserModel):
     name: str
     email: str
     new_user: bool
-    contact: int | None
-    company_id: str | None = None
-    role: Literal["super_admin", "company_admin", "user"] | None = None
-    sub_role: Literal["viewer", "editor"] | None = None
-    account_status: Literal["pending", "approved", "revoked"] | None = None
+    contact: Union[int, None]
+    company_id: Union[str, None] = None
+    role: Union[Literal["super_admin", "company_admin", "user"], None] = None
+    sub_role: Union[Literal["viewer", "editor"], None] = None
+    account_status: Union[Literal["pending", "approved", "revoked"], None] = None
     access_token: str
     refresh_token: str
     token_type: str

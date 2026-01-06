@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal, Optional, List
+from typing import Literal, Optional, List, Union
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 
@@ -62,8 +62,8 @@ class ScheduleCalendarQuery(BaseModel):
 class GanttTask(BaseModel):
     """Represents a task in the Gantt chart"""
     id: str
-    start: str | datetime # Start time in IST format
-    end: str | datetime # End time in IST format
+    start: Union[str, datetime]# Start time in IST format
+    end: Union[str, datetime] # End time in IST format
     client: Optional[str] = None
     project: Optional[str] = None
     schedule_no: Optional[str] = None
@@ -96,13 +96,13 @@ class GanttResponse(BaseModel):
 
 class GanttRequest(BaseModel):
     """Body of the schedule_calendar/gantt endpoint"""
-    query_date: datetime | str
+    query_date: Union[str, datetime]
 
 class PlantTask(BaseModel):
     """Represents a task for a plant in the plant gantt chart"""
     id: str
-    start: str | datetime
-    end: str | datetime
+    start: Union[str, datetime]
+    end: Union[str, datetime]
     client: Optional[str] = None
     project: Optional[str] = None
     schedule_no: Optional[str] = None

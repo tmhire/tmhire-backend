@@ -3,14 +3,14 @@ from app.models.user import UserModel
 from app.services.auth_service import get_current_user
 from app.services.dashboard_service import get_dashboard_stats
 from app.schemas.response import StandardResponse
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from datetime import date, datetime
 
 router = APIRouter(tags=["Dashboard"])
 
 @router.get("/", response_model=StandardResponse[Dict[str, Any]])
 async def get_dashboard(
-    date_val: date | str = Query(datetime.now().date(), description="Get dashboard stats for a specific date (YYYY-MM-DD)"),
+    date_val: Union[date, str] = Query(datetime.now().date(), description="Get dashboard stats for a specific date (YYYY-MM-DD)"),
     current_user: UserModel = Depends(get_current_user)
 ):
     """

@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 from app.db.mongodb import PyObjectId
 from bson import ObjectId
 
@@ -9,7 +9,7 @@ class PumpModel(BaseModel):
     user_id: PyObjectId  # Keep for backward compatibility
     company_id: Optional[PyObjectId] = None  # Company that owns this pump
     created_by: Optional[PyObjectId] = None  # User who created this pump
-    plant_id: Optional[PyObjectId | str] = None
+    plant_id: Optional[Union[PyObjectId, str]] = None
     identifier: str
     capacity: float
     type: Literal["line", "boom"]
@@ -17,8 +17,8 @@ class PumpModel(BaseModel):
     make: Optional[str] = None
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
-    pump_operator_id: Optional[PyObjectId | str] = None
-    pipeline_gang_id: Optional[PyObjectId | str] = None
+    pump_operator_id: Optional[Union[PyObjectId, str]] = None
+    pipeline_gang_id: Optional[Union[PyObjectId, str]] = None
     remarks: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -54,8 +54,8 @@ class PumpCreate(BaseModel):
     make: str
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
-    pump_operator_id: Optional[PyObjectId | str] = None
-    pipeline_gang_id: Optional[PyObjectId | str] = None
+    pump_operator_id: Optional[Union[PyObjectId, str]] = None
+    pipeline_gang_id: Optional[Union[PyObjectId, str]] = None
     remarks: Optional[str] = None
 
     model_config = ConfigDict(
@@ -85,8 +85,8 @@ class PumpUpdate(BaseModel):
     make: Optional[str] = None
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
-    pump_operator_id: Optional[PyObjectId | str] = None
-    pipeline_gang_id: Optional[PyObjectId | str] = None
+    pump_operator_id: Optional[Union[PyObjectId, str]] = None
+    pipeline_gang_id: Optional[Union[PyObjectId, str]] = None
     remarks: Optional[str] = None
 
     model_config = ConfigDict(

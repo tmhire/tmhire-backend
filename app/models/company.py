@@ -35,12 +35,12 @@ class CompanyModel(BaseModel):
 
 class CompanyCreate(BaseModel):
     role: Literal["company_admin", "user"]
-    id: str | None = None
-    company_code: str | None = None
-    company_name: str | None = None
-    company_status: Literal["pending", "approved", "revoked"] | None = None
-    city: str | None = None
-    contact: str | None = None
+    id: Optional[str] = None
+    company_code: Optional[str] = None
+    company_name: Optional[str] = None
+    company_status: Optional[Literal["pending", "approved", "revoked"]] = None
+    city: Optional[str] = None
+    contact: Optional[str] = None
     preferred_format: Literal["12h", "24h"] = "24h"
     custom_start_hour: float = 0.0
 
@@ -60,10 +60,10 @@ class CompanyCreate(BaseModel):
     )
 
 class CompanyUpdate(BaseModel):
-    company_code: str | None = None
-    company_name: str | None = None
-    company_status: Literal["pending", "approved", "revoked"] | None = None
-    city: str | None = None
+    company_code: Optional[str] = None
+    company_name: Optional[str] = None
+    company_status: Optional[Literal["pending", "approved", "revoked"]] = None
+    city: Optional[str] = None
     preferred_format: Literal["12h", "24h"] = "24h"
     custom_start_hour: float = 0.0
 

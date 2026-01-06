@@ -2,7 +2,7 @@ import asyncio
 from app.db.mongodb import plants, transit_mixers, schedules, pumps, clients
 from app.models.user import UserModel
 from bson import ObjectId
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from datetime import datetime, timedelta, date
 from calendar import monthrange
 from pymongo import DESCENDING
@@ -12,7 +12,7 @@ from app.services.schedule_calendar_service import _ensure_dateobj, _parse_datet
 from app.services.tm_service import get_all_tms
 from fastapi import HTTPException
 
-async def get_dashboard_stats(date_val: date | str, current_user: UserModel) -> Dict[str, Any]:
+async def get_dashboard_stats(date_val: Union[date, str], current_user: UserModel) -> Dict[str, Any]:
     """Get all dashboard statistics for the current user's company."""
     if not current_user.company_id:
         raise HTTPException(status_code=400, detail="User must belong to a company")
