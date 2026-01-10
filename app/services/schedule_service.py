@@ -411,6 +411,7 @@ async def calculate_tm_suggestions(current_user: UserModel, input_params: InputP
     return_time = input_params.return_time
     buffer_time = input_params.buffer_time
     load_time = input_params.load_time
+    wait_time = input_params.wait_time
     quantity = input_params.quantity
     pumping_speed = input_params.pumping_speed
     pump_onward_time = input_params.pump_onward_time
@@ -419,7 +420,8 @@ async def calculate_tm_suggestions(current_user: UserModel, input_params: InputP
     # Calculate cycle time components
     cycle_time = onward_time + return_time + buffer_time + load_time + unloading_time
     
-    tm_count = math.ceil(cycle_time / unloading_time)
+    extra_tm = math.ceil(cycle_time / wait_time) if wait_time > 0 else 0
+    tm_count = math.ceil(cycle_time / unloading_time) + extra_tm
 
     cycle_time = cycle_time / 60  # Convert cycle time to minutes
     
