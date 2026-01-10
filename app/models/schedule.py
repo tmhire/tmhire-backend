@@ -18,6 +18,7 @@ class InputParams(BaseModel):
     return_time: int
     buffer_time: int
     load_time: int = 0
+    wait_time: int = 0
     pump_start: datetime = Field(default_factory=lambda: datetime.now().replace(hour=8, minute=0, second=0, microsecond=0))
     schedule_date: date = Field(default_factory=lambda: datetime.now().date())
     is_burst_model: Optional[bool] = False
@@ -180,6 +181,7 @@ class ScheduleModel(BaseModel):
                     "return_time": 25,
                     "buffer_time": 5,
                     "load_time": 5,
+                    "wait_time": 10,
                     "pump_start": "2023-06-25T08:00:00",
                     "schedule_date": "2023-06-25",
                     "is_burst_model": False
@@ -291,6 +293,7 @@ class ScheduleCreate(BaseModel):
                     "return_time": 25,
                     "buffer_time": 5,
                     "load_time": 5,
+                    "wait_time": 10,
                     "pump_start": "2023-06-25T08:00:00",
                     "schedule_date": "2023-06-25",
                     "is_burst_model": False
@@ -361,6 +364,7 @@ class ScheduleUpdate(BaseModel):
                     "return_time": 25,
                     "buffer_time": 5,
                     "load_time": 5,
+                    "wait_time": 10,
                     "pump_start": "2023-06-26T08:00:00",
                     "schedule_date": "2023-06-26",
                     "is_burst_model": False

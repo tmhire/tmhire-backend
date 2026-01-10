@@ -806,6 +806,7 @@ async def get_gantt_data(
 
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0)
         load_time = schedule.get("input_params", {}).get("load_time", 0)
+        wait_time = schedule.get("input_params", {}).get("wait_time", 0)
 
         # Check if this schedule uses burst model
         is_burst_model = schedule.get("input_params", {}).get("is_burst_model", False)
