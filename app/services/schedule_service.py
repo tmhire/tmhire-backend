@@ -229,6 +229,7 @@ async def get_schedule(id: str, current_user: UserModel) -> Optional[GetSchedule
         # Add cycle_time and trip_no_for_tm and loading_time to each trip in output_table
         buffer_time = schedule.get("input_params", {}).get("buffer_time", 0 )
         load_time = schedule.get("input_params", {}).get("load_time", 0 )
+        wait_time = schedule.get("input_params", {}).get("wait_time", 0 )
         tm_trip = {}
         for trip in schedule.get("output_table", []) + schedule.get("burst_table", []):
             # Calculate cycle_time
@@ -410,6 +411,7 @@ async def calculate_tm_suggestions(current_user: UserModel, input_params: InputP
     return_time = input_params.return_time
     buffer_time = input_params.buffer_time
     load_time = input_params.load_time
+    wait_time = input_params.wait_time
     quantity = input_params.quantity
     pumping_speed = input_params.pumping_speed
     pump_onward_time = input_params.pump_onward_time
@@ -418,7 +420,8 @@ async def calculate_tm_suggestions(current_user: UserModel, input_params: InputP
     # Calculate cycle time components
     cycle_time = onward_time + return_time + buffer_time + load_time + unloading_time
     
-    tm_count = math.ceil(cycle_time / unloading_time)
+    extra_tm = math.ceil(cycle_time / wait_time) if wait_time > 0 else 0
+    tm_count = math.ceil(cycle_time / unloading_time) + extra_tm
 
     cycle_time = cycle_time / 60  # Convert cycle time to minutes
     
@@ -702,6 +705,7 @@ def pour_schedule(
     return_time = input_params.return_time
     buffer_time = input_params.buffer_time
     load_time = input_params.load_time
+    wait_time = input_params.wait_time
     unloading_time = input_params.unloading_time
     pump_onward_time = input_params.pump_onward_time
     pump_fixing_time = input_params.pump_fixing_time
@@ -723,7 +727,7 @@ def pour_schedule(
         if not partially_available_tm_end_time or partially_available_tm_end_time is None:
             partially_available_tm_end_time = datetime.min
 
-        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min) - timedelta(minutes=buffer_time+load_time+onward_time), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
+        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min) - timedelta(minutes=buffer_time+load_time+onward_time+wait_time), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
 
     pump_available_time = base_time  # pump is free at this time
     if type == "pumping":
@@ -756,7 +760,7 @@ def pour_schedule(
             min_tm_departure_time = tm_available_times[tm]
             # Add buffer and loading time to determine when TM is actually available for next trip
             tm_available_time = min_tm_departure_time + timedelta(minutes=buffer_time+load_time)
-            potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time)
+            potential_tm_arrival_time = tm_available_time + timedelta(minutes=onward_time+wait_time)
             effective_site_arrival = max(target_site_arrival_for_current_trip, potential_tm_arrival_time)
 
             if effective_site_arrival < earliest_effective_site_arrival_for_best_tm:
@@ -778,7 +782,7 @@ def pour_schedule(
             tm_unloading_time = get_unloading_time(tm_capacity)
 
         pump_start = earliest_effective_site_arrival_for_best_tm
-        plant_start = pump_start - timedelta(minutes=onward_time)
+        plant_start = pump_start - timedelta(minutes=onward_time+wait_time)
         plant_load = plant_start - timedelta(minutes=load_time)
         plant_buffer = plant_load - timedelta(minutes=buffer_time)
         unloading_end = pump_start + timedelta(minutes=unloading_time)
@@ -837,6 +841,7 @@ def burst_schedule(
     return_time = input_params.return_time
     buffer_time = input_params.buffer_time
     load_time = input_params.load_time
+    wait_time = input_params.wait_time
     unloading_time = input_params.unloading_time
     cycle_time = onward_time + return_time + buffer_time + load_time + unloading_time
     tm_required = math.ceil(cycle_time / unloading_time)
@@ -880,7 +885,7 @@ def burst_schedule(
         if not partially_available_tm_end_time or partially_available_tm_end_time is None:
             partially_available_tm_end_time = datetime.min
 
-        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min) - timedelta(minutes=buffer_time+load_time+onward_time), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
+        tm_available_times[tm] = max(datetime.combine(schedule_date, time.min) - timedelta(minutes=buffer_time+load_time+onward_time+wait_time), _convert_to_datetime(partially_available_tm_end_time) + timedelta(minutes=1))
 
     pump_available_time = base_time  # pump is free at this time
     if pump_id and partially_available_pump:
@@ -895,14 +900,14 @@ def burst_schedule(
         earliest_buffer_start_for_best_tm = datetime.max
 
         if trip_no == 1:
-            target_buffer_start_for_current_trip = pump_available_time - timedelta(minutes=onward_time+buffer_time+load_time)
+            target_buffer_start_for_current_trip = pump_available_time - timedelta(minutes=onward_time+buffer_time+load_time+wait_time)
             print('First trip', target_buffer_start_for_current_trip)
         elif trip_no <= tm_queue + 1:
             target_buffer_start_for_current_trip = plant_buffer + timedelta(minutes=load_time+buffer_time+1)
             print('Second half trip', target_buffer_start_for_current_trip)
         else:
             print(plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1), "head", headway_time)
-            target_buffer_start_for_current_trip = max(plant_buffer + timedelta(minutes=load_time+buffer_time+1), plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1+onward_time+buffer_time+load_time))
+            target_buffer_start_for_current_trip = max(plant_buffer + timedelta(minutes=load_time+buffer_time+1), plant_buffer + timedelta(minutes=headway_time), unloading_end - timedelta(minutes=max_wait_time-1+onward_time+buffer_time+load_time+wait_time))
             print('Third half trip', target_buffer_start_for_current_trip)
 
         for tm in selected_tms:
@@ -933,7 +938,7 @@ def burst_schedule(
         plant_load = plant_buffer + timedelta(minutes=buffer_time)
         plant_start = plant_load + timedelta(minutes=load_time)
         site_reach = plant_start + timedelta(minutes=onward_time)
-        pump_start = max(site_reach, unloading_end + timedelta(minutes=1)) if trip_no > 1 else site_reach
+        pump_start = max(site_reach + timedelta(minutes=wait_time), unloading_end + timedelta(minutes=1)) if trip_no > 1 else site_reach + timedelta(minutes=wait_time)
         unloading_end = pump_start + timedelta(minutes=unloading_time)
         return_at = unloading_end + timedelta(minutes=return_time)
         waiting_time = (pump_start - site_reach).total_seconds() / 60
