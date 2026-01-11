@@ -420,7 +420,7 @@ async def calculate_tm_suggestions(current_user: UserModel, input_params: InputP
     # Calculate cycle time components
     cycle_time = onward_time + return_time + buffer_time + load_time + unloading_time
     
-    extra_tm = math.ceil(cycle_time / wait_time) if wait_time > 0 else 0
+    extra_tm = math.ceil(wait_time / unloading_time) if unloading_time > 0 else 0
     tm_count = math.ceil(cycle_time / unloading_time) + extra_tm
 
     cycle_time = cycle_time / 60  # Convert cycle time to minutes
@@ -439,7 +439,7 @@ async def calculate_tm_suggestions(current_user: UserModel, input_params: InputP
         "trips_per_tm": base_trips_per_tm,
         "remaining_trips": remaining_trips,
         "cycle_time": cycle_time,
-        "tm_overrule": tm_overrule if tm_overrule is not None else tm_count
+        "tm_overrule": tm_overrule if tm_overrule is not None and tm_overrule != 0 else tm_count
     }
 
 async def _get_tm_ids_and_pump_ids_by_schedule_date(target_datetime: date, current_user: UserModel) -> Tuple[Dict[str, Any]]:
